@@ -1,0 +1,63 @@
+version: '3'
+
+vars:
+  coverage_file: tmp/coverage.out
+  coverage_html: tmp/coverage.html
+  junit_file: tmp/unit-tests.xml
+  test_flags: -race
+
+tasks:
+  run:
+    desc: Run app with hot reload
+    cmds:
+      - go tool air
+
+  lint:
+    desc: Run linter
+    cmds:
+      - go tool golangci-lint run
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go tool goimports -w .
+
+  test:
+    desc: Run tests with gotestsum
+    cmds:
+      - go tool gotestsum --format pkgname -- {{.test_flags}} ./...
+
+  coverage:
+    desc: Run tests with coverage output
+    cmds:
+      - mkdir -p tmp
+      - go tool gotestsum --format pkgname --junitfile {{.junit_file}} -- {{.test_flags}} -coverprofile={{.coverage_file}} ./...
+      - go tool cover -func={{.coverage_file}}
+
+  coverage:html:
+    desc: Generate HTML coverage report
+    cmds:
+      - mkdir -p tmp
+      - go test {{.test_flags}} -coverprofile={{.coverage_file}} ./...
+      - go tool cover -html={{.coverage_file}} -o {{.coverage_html}}
+
+  vuln:
+    desc: Check vulnerabilities
+    cmds:
+      - go tool govulncheck ./...
+
+  migrate:
+    desc: Run goose commands; pass args after --
+    cmds:
+      - go tool goose {{.CLI_ARGS}}
+
+  mocks:
+    desc: Run mockery; pass args after --
+    cmds:
+      - go tool mockery {{.CLI_ARGS}}
+
+  generate:
+    desc: Run code generators
+    cmds:
+      - go tool sqlc generate
+      - go tool gqlgen generate
