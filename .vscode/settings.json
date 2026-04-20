@@ -7,8 +7,8 @@
     "tmp": true
   },
   "go.useLanguageServer": true,
-  "go.formatTool": "go tool goimports",
-  "go.lintTool": "go tool golangci-lint",
+  "go.formatTool": "goimports",
+  "go.lintTool": "golangci-lint-v2",
   "go.testFlags": [
     "-race",
     "-count=1"
