@@ -1,0 +1,46 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Verify project builds
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -n "$(go list ./... 2>/dev/null)" ]]; then
+            go build ./...
+            exit 0
+          fi
+
+          if compgen -G 'cmd/*' > /dev/null; then
+            while IFS= read -r entry; do
+              [[ -d "$entry" ]] || continue
+              go build "./$entry"
+            done < <(find cmd -mindepth 1 -maxdepth 1 -type d | sort)
+            exit 0
+          fi
+
+          echo "No Go packages or cmd entrypoints found; skipping build."

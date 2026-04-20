@@ -1,0 +1,38 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Run tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -n "$(go list ./... 2>/dev/null)" ]]; then
+            go tool task test
+            exit 0
+          fi
+
+          echo "No Go packages found; skipping tests."
