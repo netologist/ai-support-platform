@@ -9,12 +9,17 @@
   "go.useLanguageServer": true,
   "go.formatTool": "goimports",
   "go.lintTool": "golangci-lint-v2",
+  "go.lintOnSave": "workspace",
   "go.testFlags": [
     "-race",
     "-count=1"
   ],
   "go.testTimeout": "60s",
   "go.testEnvFile": "${workspaceFolder}/.env",
+  "go.testExplorer.enable": true,
+  "go.testExplorer.packageDisplayMode": "nested",
+  "go.testExplorer.showOutput": true,
+  "go.toolsManagement.checkForUpdates": "local",
   "[go]": {
     "editor.defaultFormatter": "golang.go",
     "editor.formatOnSave": true

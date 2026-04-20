@@ -5,6 +5,7 @@ This repository uses Go's tool management together with Task to provide a single
 ## Prerequisites
 
 - Go 1.26+
+- VS Code with the Go extension, or GoLand
 
 ## Install tools
 
@@ -15,6 +16,44 @@ go install tool
 ```
 
 If your Go version does not support that workflow yet, you can still run commands through Go directly with `go tool ...` after dependencies are downloaded.
+
+This includes Delve for debugging because `github.com/go-delve/delve/cmd/dlv` is tracked in the Go tool block.
+
+## Editor setup
+
+If you use VS Code, install the official Go extension: `golang.go`.
+
+The workspace settings in `.vscode/settings.json` are configured to:
+
+- enable format on save
+- use `goimports` as the formatter
+- enable in-editor test discovery
+- run lint on save with `golangci-lint`
+- pass `-race` to test runs in the editor
+
+Debugging is configured in `.vscode/launch.json` for:
+
+- launching the current package
+- launching the current file
+- attaching to a Delve server on port `2345`
+
+To install Delve locally for the project toolchain:
+
+```bash
+go install tool
+```
+
+To install only Delve directly:
+
+```bash
+go tool dlv version
+```
+
+If the binary is not installed yet, run:
+
+```bash
+go install github.com/go-delve/delve/cmd/dlv@latest
+```
 
 ## Task commands
 
