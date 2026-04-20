@@ -1,0 +1,28 @@
+{
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  },
+  "files.exclude": {
+    "tmp": true
+  },
+  "go.useLanguageServer": true,
+  "go.formatTool": "go tool goimports",
+  "go.lintTool": "go tool golangci-lint",
+  "go.testFlags": [
+    "-race",
+    "-count=1"
+  ],
+  "go.testTimeout": "60s",
+  "go.testEnvFile": "${workspaceFolder}/.env",
+  "[go]": {
+    "editor.defaultFormatter": "golang.go",
+    "editor.formatOnSave": true
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml"
+  },
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json": "compose.yaml"
+  }
+}
