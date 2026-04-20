@@ -63,10 +63,28 @@ List available tasks:
 go tool task --list
 ```
 
+Install repo-managed tools and verify key editor tooling:
+
+```bash
+go tool task bootstrap
+```
+
 Run the development server with hot reload:
 
 ```bash
 go tool task run
+```
+
+Start Delve for the API entrypoint when `cmd/api` exists:
+
+```bash
+go tool task debug:api
+```
+
+Start Delve for the worker entrypoint when `cmd/worker` exists:
+
+```bash
+go tool task debug:worker
 ```
 
 Format the codebase:
@@ -128,3 +146,4 @@ go tool task mocks -- --all --output internal/mocks
 - `test`, `coverage`, and `coverage:html` run with `-race` enabled.
 - Coverage artifacts are written under `tmp/`.
 - `migrate` and `mocks` are thin wrappers around `go tool goose` and `go tool mockery` so you can keep command usage flexible.
+- `debug:api` and `debug:worker` require `cmd/api` and `cmd/worker` directories to exist.

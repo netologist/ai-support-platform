@@ -1,16 +1,45 @@
-version: '3'
+version: "3"
 
 vars:
+  api_debug_port: 2345
+  worker_debug_port: 2346
   coverage_file: tmp/coverage.out
   coverage_html: tmp/coverage.html
   junit_file: tmp/unit-tests.xml
   test_flags: -race
 
 tasks:
+  bootstrap:
+    desc: Install repo-managed Go tools and verify key editor tooling
+    cmds:
+      - go install tool
+      - go tool goimports -h >/dev/null
+      - go tool golangci-lint version
+      - go tool dlv version
+      - go tool task --list >/dev/null
+
   run:
     desc: Run app with hot reload
     cmds:
       - go tool air
+
+  debug:api:
+    desc: Start Delve for cmd/api on port {{.api_debug_port}}
+    preconditions:
+      - sh: test -d ./cmd/api
+        msg: cmd/api does not exist yet
+    cmds:
+      - go tool dlv debug ./cmd/api --headless --listen=:{{.api_debug_port}}
+        --api-version=2 --accept-multiclient
+
+  debug:worker:
+    desc: Start Delve for cmd/worker on port {{.worker_debug_port}}
+    preconditions:
+      - sh: test -d ./cmd/worker
+        msg: cmd/worker does not exist yet
+    cmds:
+      - go tool dlv debug ./cmd/worker --headless
+        --listen=:{{.worker_debug_port}} --api-version=2 --accept-multiclient
 
   lint:
     desc: Run linter
@@ -31,7 +60,8 @@ tasks:
     desc: Run tests with coverage output
     cmds:
       - mkdir -p tmp
-      - go tool gotestsum --format pkgname --junitfile {{.junit_file}} -- {{.test_flags}} -coverprofile={{.coverage_file}} ./...
+      - go tool gotestsum --format pkgname --junitfile {{.junit_file}} --
+        {{.test_flags}} -coverprofile={{.coverage_file}} ./...
       - go tool cover -func={{.coverage_file}}
 
   coverage:html:
