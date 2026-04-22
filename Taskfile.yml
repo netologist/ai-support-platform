@@ -110,3 +110,4 @@ tasks:
     desc: Run code generators
     cmds:
       - go tool sqlc generate
+      - go tool oapi-codegen -config openapi/config.yaml openapi/spec.yaml
