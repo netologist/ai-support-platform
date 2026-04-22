@@ -6,11 +6,18 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  args_bin = []
-  bin = "./tmp/api"
-  cmd = "go build -o ./tmp/api ./cmd/api"
+  cmd = "go build -gcflags='all=-N -l' -o ./tmp/api ./cmd/api"
+  bin = "/Users/hozgan/.local/share/mise/installs/go/1.26.2/bin/dlv"
+  args_bin = [
+    "exec",
+    "./tmp/api",
+    "--headless",
+    "--listen=:2345",
+    "--api-version=2",
+    "--accept-multiclient"
+  ]
   delay = 1000
-  entrypoint = ["./tmp/api"]
+  entrypoint = []
   exclude_dir = ["assets", "tmp", "vendor", "testdata"]
   exclude_file = []
   exclude_regex = ["_test.go"]
