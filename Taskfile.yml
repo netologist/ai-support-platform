@@ -18,6 +18,21 @@ tasks:
       - go tool dlv version
       - go tool task --list >/dev/null
 
+  build:docker:
+    desc: Build Docker images
+    cmds:
+      - docker build -t ai-support-platform-api --build-arg APP=api .
+
+  local-up:
+    desc: Start local infrastructure
+    cmds:
+      - docker-compose up -d
+
+  local-down:
+    desc: Stop local infrastructure
+    cmds:
+      - docker-compose downssss
+
   run:
     desc: Run app with hot reload
     cmds:

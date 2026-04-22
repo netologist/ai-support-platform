@@ -1,0 +1,15 @@
+.git
+.github
+.vscode
+.agents
+tmp
+coverage.out
+dist
+bin
+vendor
+*.log
+*.test
+*.out
+compose.yaml
+README.md
+docs
