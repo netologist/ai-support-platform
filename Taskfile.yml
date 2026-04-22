@@ -110,4 +110,3 @@ tasks:
     desc: Run code generators
     cmds:
       - go tool sqlc generate
-      - go tool gqlgen generate
