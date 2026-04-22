@@ -3,6 +3,7 @@
     "golang.go",
     "ms-azuretools.vscode-docker",
     "redhat.vscode-yaml",
-    "editorconfig.editorconfig"
+    "editorconfig.editorconfig",
+    "johnpapa.vscode-peacock"
   ]
 }

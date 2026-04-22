@@ -23,6 +23,11 @@ tasks:
     cmds:
       - go tool air
 
+  run:api:
+    desc: Run API with hot reload
+    cmds:
+      - go tool air -c .air.api.toml
+
   debug:api:
     desc: Start Delve for cmd/api on port {{.api_debug_port}}
     preconditions:
