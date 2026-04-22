@@ -8,7 +8,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/netologist/ai-support-platform/internal/app/command"
+	infraauth "github.com/netologist/ai-support-platform/internal/infra/auth"
 	messagingkafka "github.com/netologist/ai-support-platform/internal/infra/messaging/kafka"
+	postgresrepo "github.com/netologist/ai-support-platform/internal/infra/repository/postgres"
+	"github.com/netologist/ai-support-platform/internal/infra/repository/sqlc"
+	transporthttp "github.com/netologist/ai-support-platform/internal/transport/http"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -78,13 +83,40 @@ func NewRuntime(ctx context.Context, config Config) (Runtime, error) {
 	}
 	closers.Add(kafkaPublisher.Close)
 
+// -------------------------
+	// Repositories
+	// -------------------------
+	queries := sqlc.New(db)
+	authRepository := postgresrepo.NewAuthRepository(queries)
+
+    // -------------------------
+    // Auth
+    // -------------------------
+    tokenManager := infraauth.NewTokenManager(config.JWTIssuer, config.JWTSecret, config.JWTTTL)
+
+    // -------------------------
+	// Services
+	// -------------------------
+	loginService := command.NewLoginService(
+		authRepository,
+		infraauth.PasswordVerifier{},
+		tokenManager,
+	)
+
+    // -------------------------
+	// HTTP
+	// -------------------------
+	handler := transporthttp.NewHandler(transporthttp.Dependencies{
+		LoginService:           loginService,
+		TokenVerifier:          tokenManager,
+	})
 
     // -------------------------
     // API Server
     // -------------------------
 	server := &http.Server{
 		Addr:              config.HTTPAddress,
-		Handler:           http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
