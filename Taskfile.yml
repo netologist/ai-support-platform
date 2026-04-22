@@ -101,6 +101,11 @@ tasks:
     cmds:
       - go tool goose {{.CLI_ARGS}}
 
+  seed:
+    desc: Run goose commands; pass args after --
+    cmds:
+      - go tool goose -dir ./migrations/seeds {{.CLI_ARGS}}
+
   mocks:
     desc: Run mockery; pass args after --
     cmds:
