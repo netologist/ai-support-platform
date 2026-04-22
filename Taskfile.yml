@@ -31,7 +31,7 @@ tasks:
   local-down:
     desc: Stop local infrastructure
     cmds:
-      - docker-compose downssss
+      - docker-compose down --remove-orphans {{.CLI_ARGS}}
 
   run:
     desc: Run app with hot reload

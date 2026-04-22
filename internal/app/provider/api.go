@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	messagingkafka "github.com/netologist/ai-support-platform/internal/infra/messaging/kafka"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -67,7 +68,20 @@ func NewRuntime(ctx context.Context, config Config) (Runtime, error) {
 	}
 	closers.AddWithError(redisClient.Close)
 
+	// -------------------------
+	// Kafka
+	// -------------------------
+	kafkaPublisher, err := messagingkafka.NewPublisher(config.KafkaBrokers)
+	if err != nil {
+		closers.Close()
+		return Runtime{}, fmt.Errorf("build kafka publisher: %w", err)
+	}
+	closers.Add(kafkaPublisher.Close)
 
+
+    // -------------------------
+    // API Server
+    // -------------------------
 	server := &http.Server{
 		Addr:              config.HTTPAddress,
 		Handler:           http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
