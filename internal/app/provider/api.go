@@ -21,7 +21,6 @@ type APIRuntime struct {
 	CloseFn func()
 }
 
-
 func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 	closer := &closerStack{}
 

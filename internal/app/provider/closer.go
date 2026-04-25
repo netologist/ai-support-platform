@@ -2,7 +2,6 @@ package provider
 
 import "errors"
 
-
 type closerStack struct {
 	fns []func() error
 }

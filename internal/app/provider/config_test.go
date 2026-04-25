@@ -11,7 +11,7 @@ func TestLoadConfig_DefaultsToFakeProvider(t *testing.T) {
 	t.Setenv("APP_JWT_SECRET", "secret")
 	t.Setenv("APP_AI_PROVIDER", "")
 	t.Setenv("APP_AI_API_KEY", "")
-    t.Setenv("APP_AI_MODEL", "gemini-2.5-flash")
+	t.Setenv("APP_AI_MODEL", "gemini-2.5-flash")
 	t.Setenv("GOOGLE_API_KEY", "")
 	t.Setenv("GEMINI_API_KEY", "")
 
@@ -41,7 +41,7 @@ func TestLoadConfig_EinoUsesGoogleAPIKeyFallback(t *testing.T) {
 	t.Setenv("APP_JWT_SECRET", "secret")
 	t.Setenv("APP_AI_PROVIDER", "eino")
 	t.Setenv("APP_AI_API_KEY", "")
-    t.Setenv("APP_AI_MODEL", "gemini-2.5-flash")
+	t.Setenv("APP_AI_MODEL", "gemini-2.5-flash")
 	t.Setenv("GOOGLE_API_KEY", "google-key")
 	t.Setenv("GEMINI_API_KEY", "")
 
