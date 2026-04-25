@@ -5,6 +5,11 @@ resolve-type-alias: false
 disable-version-string: true
 issue-845-fix: true
 packages:
+  github.com/netologist/ai-support-platform/internal/app/command:
+    interfaces:
+      LoginExecutor:
+        config:
+          dir: internal/mocks/command
   github.com/netologist/ai-support-platform/internal/domain/repository:
     interfaces:
       AuthRepository:

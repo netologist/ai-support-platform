@@ -10,29 +10,19 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/netologist/ai-support-platform/internal/app/command"
 	"github.com/netologist/ai-support-platform/internal/domain/entity"
+	mockcommand "github.com/netologist/ai-support-platform/internal/mocks/command"
 )
-
-type stubLoginExecutor struct {
-	called bool
-	cmd    command.LoginCommand
-	result command.LoginResult
-	err    error
-}
-
-func (s *stubLoginExecutor) Execute(_ context.Context, cmd command.LoginCommand) (command.LoginResult, error) {
-	s.called = true
-	s.cmd = cmd
-	return s.result, s.err
-}
 
 func TestNewRouter_Healthz(t *testing.T) {
 	t.Parallel()
 
-	router := NewRouter(Dependencies{LoginExecutor: &stubLoginExecutor{}})
+	executor := mockcommand.NewMockLoginExecutor(t)
+	router := NewRouter(Dependencies{LoginExecutor: executor})
 	req := httptest.NewRequest(nethttp.MethodGet, "/healthz", nil)
 	rr := httptest.NewRecorder()
 
@@ -45,7 +35,8 @@ func TestNewRouter_Healthz(t *testing.T) {
 func TestNewRouter_OpenAPIJSON(t *testing.T) {
 	t.Parallel()
 
-	router := NewRouter(Dependencies{LoginExecutor: &stubLoginExecutor{}})
+	executor := mockcommand.NewMockLoginExecutor(t)
+	router := NewRouter(Dependencies{LoginExecutor: executor})
 	req := httptest.NewRequest(nethttp.MethodGet, "/openapi.json", nil)
 	rr := httptest.NewRecorder()
 
@@ -60,15 +51,19 @@ func TestNewRouter_LoginWiresExecutor(t *testing.T) {
 	t.Parallel()
 
 	userID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
-	executor := &stubLoginExecutor{
-		result: command.LoginResult{
+	executor := mockcommand.NewMockLoginExecutor(t)
+	var capturedCmd command.LoginCommand
+	executor.EXPECT().Execute(mock.Anything, mock.Anything).
+		Run(func(_ context.Context, cmd command.LoginCommand) {
+			capturedCmd = cmd
+		}).
+		Return(command.LoginResult{
 			AccessToken: "token.value",
 			Principal: entity.Principal{
 				UserID: userID,
 				Email:  "user@example.com",
 			},
-		},
-	}
+		}, nil)
 	router := NewRouter(Dependencies{LoginExecutor: executor})
 
 	payload, err := json.Marshal(map[string]string{
@@ -83,9 +78,8 @@ func TestNewRouter_LoginWiresExecutor(t *testing.T) {
 
 	router.ServeHTTP(rr, req)
 
-	require.True(t, executor.called)
-	assert.Equal(t, "user@example.com", executor.cmd.Email)
-	assert.Equal(t, "secret", executor.cmd.Password)
+	assert.Equal(t, "user@example.com", capturedCmd.Email)
+	assert.Equal(t, "secret", capturedCmd.Password)
 	assert.Equal(t, nethttp.StatusOK, rr.Code)
 	assert.Contains(t, rr.Body.String(), "token.value")
 	assert.Contains(t, rr.Body.String(), userID.String())
