@@ -7,7 +7,33 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const getMembershipByUserAndTenant = `-- name: GetMembershipByUserAndTenant :one
+SELECT tenant_id, user_id, role, created_at
+FROM memberships
+WHERE user_id = $1 AND tenant_id = $2
+LIMIT 1
+`
+
+type GetMembershipByUserAndTenantParams struct {
+	UserID   pgtype.UUID
+	TenantID pgtype.UUID
+}
+
+func (q *Queries) GetMembershipByUserAndTenant(ctx context.Context, arg GetMembershipByUserAndTenantParams) (Membership, error) {
+	row := q.db.QueryRow(ctx, getMembershipByUserAndTenant, arg.UserID, arg.TenantID)
+	var i Membership
+	err := row.Scan(
+		&i.TenantID,
+		&i.UserID,
+		&i.Role,
+		&i.CreatedAt,
+	)
+	return i, err
+}
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, password_hash, created_at

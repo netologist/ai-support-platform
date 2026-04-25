@@ -8,7 +8,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/netologist/ai-support-platform/internal/app/command"
+	infraaudit "github.com/netologist/ai-support-platform/internal/infra/audit"
 	infraauth "github.com/netologist/ai-support-platform/internal/infra/auth"
+
 	messagingkafka "github.com/netologist/ai-support-platform/internal/infra/messaging/kafka"
 	postgresrepo "github.com/netologist/ai-support-platform/internal/infra/repository/postgres"
 	"github.com/netologist/ai-support-platform/internal/infra/repository/sqlc"
@@ -63,6 +65,8 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 	// -------------------------
 	queries := sqlc.New(db)
 	authRepository := postgresrepo.NewAuthRepository(queries)
+    auditRepository := postgresrepo.NewAuditRepository(queries)
+
 	// -------------------------
 	// Auth
 	// -------------------------
@@ -71,10 +75,13 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 	// -------------------------
 	// Services
 	// -------------------------
+	auditLogger := infraaudit.NewLogger(auditRepository, kafkaPublisher, config.KafkaAuditTopic)
+
 	loginService := command.NewLoginService(
 		authRepository,
 		infraauth.PasswordVerifier{},
 		tokenManager,
+		auditLogger,
 	)
 
 	// -------------------------

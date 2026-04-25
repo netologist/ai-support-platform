@@ -28,8 +28,9 @@ func newHandler(
 	repo *mockrepo.MockAuthRepository,
 	verifier *mocksvc.MockPasswordVerifier,
 	issuer *mocksvc.MockTokenIssuer,
+    auditLogger *mocksvc.MockAuditLogger,
 ) *handlers.Handlers {
-	svc := command.NewLoginService(repo, verifier, issuer)
+	svc := command.NewLoginService(repo, verifier, issuer, auditLogger)
 	return handlers.New(svc, 100, 100, time.Minute)
 }
 
@@ -49,6 +50,7 @@ func TestGetHealth(t *testing.T) {
 		mockrepo.NewMockAuthRepository(t),
 		mocksvc.NewMockPasswordVerifier(t),
 		mocksvc.NewMockTokenIssuer(t),
+		mocksvc.NewMockAuditLogger(t),
 	)
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rr := httptest.NewRecorder()
@@ -63,13 +65,15 @@ func TestGetHealth(t *testing.T) {
 
 func TestLogin(t *testing.T) {
 	fixedID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	fixedTenantID := uuid.Nil // handler does not pass TenantID; zero UUID flows through
+	fixedMembership := entity.Membership{UserID: fixedID, TenantID: fixedTenantID, Role: "agent"}
 	fixedToken := "test.jwt.token"
 	fixedUser := entity.User{ID: fixedID, Email: "user@example.com", PasswordHash: "hash"}
 
 	tests := []struct {
 		name       string
 		buildReq   func(t *testing.T) *http.Request
-		setupMocks func(repo *mockrepo.MockAuthRepository, verifier *mocksvc.MockPasswordVerifier, issuer *mocksvc.MockTokenIssuer)
+		setupMocks func(repo *mockrepo.MockAuthRepository, verifier *mocksvc.MockPasswordVerifier, issuer *mocksvc.MockTokenIssuer, auditLogger *mocksvc.MockAuditLogger)
 		wantStatus int
 		wantBody   string
 	}{
@@ -78,10 +82,11 @@ func TestLogin(t *testing.T) {
 			buildReq: func(t *testing.T) *http.Request {
 				return loginRequest(t, map[string]string{"email": "user@example.com", "password": "secret"})
 			},
-			setupMocks: func(repo *mockrepo.MockAuthRepository, verifier *mocksvc.MockPasswordVerifier, issuer *mocksvc.MockTokenIssuer) {
+			setupMocks: func(repo *mockrepo.MockAuthRepository, verifier *mocksvc.MockPasswordVerifier, issuer *mocksvc.MockTokenIssuer, auditLogger *mocksvc.MockAuditLogger) {
 				repo.EXPECT().FindUserByEmail(mock.Anything, "user@example.com").Return(fixedUser, nil)
 				verifier.EXPECT().Verify(fixedUser.PasswordHash, "secret").Return(nil)
-				issuer.EXPECT().Issue(entity.Principal{UserID: fixedID, Email: fixedUser.Email}).Return(fixedToken, nil)
+				repo.EXPECT().FindMembership(mock.Anything, fixedID, fixedTenantID).Return(fixedMembership, nil)
+				issuer.EXPECT().Issue(entity.Principal{UserID: fixedID, TenantID: fixedTenantID, Email: fixedUser.Email, Role: fixedMembership.Role}).Return(fixedToken, nil)
 			},
 			wantStatus: http.StatusOK,
 			wantBody:   fixedToken,
@@ -91,7 +96,7 @@ func TestLogin(t *testing.T) {
 			buildReq: func(t *testing.T) *http.Request {
 				return loginRequest(t, map[string]string{"email": "nobody@example.com", "password": "pass"})
 			},
-			setupMocks: func(repo *mockrepo.MockAuthRepository, verifier *mocksvc.MockPasswordVerifier, issuer *mocksvc.MockTokenIssuer) {
+			setupMocks: func(repo *mockrepo.MockAuthRepository, verifier *mocksvc.MockPasswordVerifier, issuer *mocksvc.MockTokenIssuer, auditLogger *mocksvc.MockAuditLogger) {
 				repo.EXPECT().FindUserByEmail(mock.Anything, "nobody@example.com").Return(entity.User{}, repository.ErrNotFound)
 			},
 			wantStatus: http.StatusUnauthorized,
@@ -102,7 +107,7 @@ func TestLogin(t *testing.T) {
 			buildReq: func(t *testing.T) *http.Request {
 				return loginRequest(t, map[string]string{"email": "user@example.com", "password": "wrong"})
 			},
-			setupMocks: func(repo *mockrepo.MockAuthRepository, verifier *mocksvc.MockPasswordVerifier, issuer *mocksvc.MockTokenIssuer) {
+			setupMocks: func(repo *mockrepo.MockAuthRepository, verifier *mocksvc.MockPasswordVerifier, issuer *mocksvc.MockTokenIssuer, auditLogger *mocksvc.MockAuditLogger) {
 				repo.EXPECT().FindUserByEmail(mock.Anything, "user@example.com").Return(fixedUser, nil)
 				verifier.EXPECT().Verify(fixedUser.PasswordHash, "wrong").Return(apperrors.ErrInvalidCredentials)
 			},
@@ -116,7 +121,7 @@ func TestLogin(t *testing.T) {
 				req.Header.Set("Content-Type", "application/json")
 				return req
 			},
-			setupMocks: func(_ *mockrepo.MockAuthRepository, _ *mocksvc.MockPasswordVerifier, _ *mocksvc.MockTokenIssuer) {
+			setupMocks: func(_ *mockrepo.MockAuthRepository, _ *mocksvc.MockPasswordVerifier, _ *mocksvc.MockTokenIssuer, _ *mocksvc.MockAuditLogger) {
 			},
 			wantStatus: http.StatusBadRequest,
 			wantBody:   "Invalid request",
@@ -126,7 +131,7 @@ func TestLogin(t *testing.T) {
 			buildReq: func(t *testing.T) *http.Request {
 				return loginRequest(t, map[string]string{"email": "user@example.com", "password": "secret", "extra": "field"})
 			},
-			setupMocks: func(_ *mockrepo.MockAuthRepository, _ *mocksvc.MockPasswordVerifier, _ *mocksvc.MockTokenIssuer) {
+			setupMocks: func(_ *mockrepo.MockAuthRepository, _ *mocksvc.MockPasswordVerifier, _ *mocksvc.MockTokenIssuer, _ *mocksvc.MockAuditLogger) {
 			},
 			wantStatus: http.StatusBadRequest,
 			wantBody:   "Invalid request",
@@ -138,10 +143,11 @@ func TestLogin(t *testing.T) {
 			repo := mockrepo.NewMockAuthRepository(t)
 			verifier := mocksvc.NewMockPasswordVerifier(t)
 			issuer := mocksvc.NewMockTokenIssuer(t)
+            auditLogger := mocksvc.NewMockAuditLogger(t)
 
-			tc.setupMocks(repo, verifier, issuer)
+			tc.setupMocks(repo, verifier, issuer, auditLogger)
 
-			h := newHandler(repo, verifier, issuer)
+			h := newHandler(repo, verifier, issuer, auditLogger)
 			rr := httptest.NewRecorder()
 			h.Login(rr, tc.buildReq(t))
 
@@ -153,18 +159,22 @@ func TestLogin(t *testing.T) {
 
 func TestLogin_EmailNormalized(t *testing.T) {
 	fixedID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	fixedTenantID := uuid.Nil
 	fixedUser := entity.User{ID: fixedID, Email: "user@example.com", PasswordHash: "hash"}
+	fixedMembership := entity.Membership{UserID: fixedID, TenantID: fixedTenantID, Role: "agent"}
 
 	repo := mockrepo.NewMockAuthRepository(t)
 	verifier := mocksvc.NewMockPasswordVerifier(t)
 	issuer := mocksvc.NewMockTokenIssuer(t)
+	auditLogger := mocksvc.NewMockAuditLogger(t)
 
 	// Expect the lowercased email
 	repo.EXPECT().FindUserByEmail(mock.Anything, "user@example.com").Return(fixedUser, nil)
 	verifier.EXPECT().Verify(fixedUser.PasswordHash, "secret").Return(nil)
-	issuer.EXPECT().Issue(entity.Principal{UserID: fixedID, Email: fixedUser.Email}).Return("tok", nil)
+	repo.EXPECT().FindMembership(mock.Anything, fixedID, fixedTenantID).Return(fixedMembership, nil)
+	issuer.EXPECT().Issue(entity.Principal{UserID: fixedID, TenantID: fixedTenantID, Email: fixedUser.Email, Role: fixedMembership.Role}).Return("tok", nil)
 
-	h := newHandler(repo, verifier, issuer)
+	h := newHandler(repo, verifier, issuer, auditLogger)
 	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login",
 		bytes.NewBufferString(`{"email":"USER@EXAMPLE.COM","password":"secret"}`))
 	req.Header.Set("Content-Type", "application/json")

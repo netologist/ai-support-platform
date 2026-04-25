@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/netologist/ai-support-platform/internal/domain/entity"
@@ -19,8 +20,8 @@ func NewAuthRepository(queries *generated.Queries) AuthRepository {
 	return AuthRepository{queries: queries}
 }
 
-func (repository AuthRepository) FindUserByEmail(ctx context.Context, email string) (entity.User, error) {
-	user, err := repository.queries.GetUserByEmail(ctx, email)
+func (r AuthRepository) FindUserByEmail(ctx context.Context, email string) (entity.User, error) {
+	user, err := r.queries.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.User{}, domainrepository.ErrNotFound
@@ -44,5 +45,41 @@ func (repository AuthRepository) FindUserByEmail(ctx context.Context, email stri
 		Email:        user.Email,
 		PasswordHash: user.PasswordHash,
 		CreatedAt:    createdAt,
+	}, nil
+}
+
+func (r AuthRepository) FindMembership(ctx context.Context, userID uuid.UUID, tenantID uuid.UUID) (entity.Membership, error) {
+	membership, err := r.queries.GetMembershipByUserAndTenant(ctx, generated.GetMembershipByUserAndTenantParams{
+		UserID:   toPGUUID(userID),
+		TenantID: toPGUUID(tenantID),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.Membership{}, domainrepository.ErrNotFound
+		}
+
+		return entity.Membership{}, err
+	}
+
+	domainTenantID, err := toDomainUUID(membership.TenantID)
+	if err != nil {
+		return entity.Membership{}, err
+	}
+
+	domainUserID, err := toDomainUUID(membership.UserID)
+	if err != nil {
+		return entity.Membership{}, err
+	}
+
+	createdAt, err := toTime(membership.CreatedAt)
+	if err != nil {
+		return entity.Membership{}, err
+	}
+
+	return entity.Membership{
+		TenantID:  domainTenantID,
+		UserID:    domainUserID,
+		Role:      membership.Role,
+		CreatedAt: createdAt,
 	}, nil
 }

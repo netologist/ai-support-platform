@@ -8,6 +8,8 @@ import (
 
 type Principal struct {
 	UserID    uuid.UUID
+	TenantID  uuid.UUID
 	Email     string
+	Role      string
 	ExpiresAt time.Time
 }

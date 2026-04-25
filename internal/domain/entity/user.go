@@ -12,3 +12,9 @@ type User struct {
 	PasswordHash string
 	CreatedAt    time.Time
 }
+type Membership struct {
+	TenantID  uuid.UUID
+	UserID    uuid.UUID
+	Role      string
+	CreatedAt time.Time
+}

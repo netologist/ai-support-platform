@@ -17,6 +17,9 @@ packages:
           dir: internal/mocks/repository
   github.com/netologist/ai-support-platform/internal/domain/service:
     interfaces:
+      AuditLogger:
+        config:
+          dir: internal/mocks/service
       PasswordVerifier:
         config:
           dir: internal/mocks/service

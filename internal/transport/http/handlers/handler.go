@@ -52,6 +52,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	result, err := h.loginExecutor.Execute(r.Context(), command.LoginCommand{
 		Email:    strings.ToLower(string(body.Email)),
 		Password: body.Password,
+		TenantID: body.TenantId,
 	})
 	if err != nil {
 		switch {
@@ -68,5 +69,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		AccessToken: result.AccessToken,
 		TokenType:   "Bearer",
 		UserId:      result.Principal.UserID,
+		Role:        result.Principal.Role,
+		TenantId:    result.Principal.TenantID,
 	})
 }

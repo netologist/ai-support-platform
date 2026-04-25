@@ -14,9 +14,22 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/netologist/ai-support-platform/internal/app/command"
+	apperrors "github.com/netologist/ai-support-platform/internal/app/errors"
 	"github.com/netologist/ai-support-platform/internal/domain/entity"
 	mockcommand "github.com/netologist/ai-support-platform/internal/mocks/command"
 )
+
+// loginPayload builds a valid login JSON body as required by the OpenAPI schema.
+func loginPayload(t *testing.T, email, password string, tenantID uuid.UUID) *bytes.Reader {
+	t.Helper()
+	b, err := json.Marshal(map[string]string{
+		"email":     email,
+		"password":  password,
+		"tenant_id": tenantID.String(),
+	})
+	require.NoError(t, err)
+	return bytes.NewReader(b)
+}
 
 func TestNewRouter_Healthz(t *testing.T) {
 	t.Parallel()
@@ -47,10 +60,25 @@ func TestNewRouter_OpenAPIJSON(t *testing.T) {
 	assert.Contains(t, rr.Body.String(), `"openapi"`)
 }
 
+func TestNewRouter_UnknownRoute(t *testing.T) {
+	t.Parallel()
+
+	executor := mockcommand.NewMockLoginExecutor(t)
+	router := NewRouter(Dependencies{LoginExecutor: executor})
+	req := httptest.NewRequest(nethttp.MethodGet, "/does/not/exist", nil)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, nethttp.StatusNotFound, rr.Code)
+}
+
 func TestNewRouter_LoginWiresExecutor(t *testing.T) {
 	t.Parallel()
 
 	userID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	tenantID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+
 	executor := mockcommand.NewMockLoginExecutor(t)
 	var capturedCmd command.LoginCommand
 	executor.EXPECT().Execute(mock.Anything, mock.Anything).
@@ -60,27 +88,61 @@ func TestNewRouter_LoginWiresExecutor(t *testing.T) {
 		Return(command.LoginResult{
 			AccessToken: "token.value",
 			Principal: entity.Principal{
-				UserID: userID,
-				Email:  "user@example.com",
+				UserID:   userID,
+				TenantID: tenantID,
+				Email:    "user@example.com",
 			},
 		}, nil)
+
 	router := NewRouter(Dependencies{LoginExecutor: executor})
-
-	payload, err := json.Marshal(map[string]string{
-		"email":    "USER@example.com",
-		"password": "secret",
-	})
-	require.NoError(t, err)
-
-	req := httptest.NewRequest(nethttp.MethodPost, "/v1/auth/login", bytes.NewReader(payload))
+	req := httptest.NewRequest(nethttp.MethodPost, "/v1/auth/login",
+		loginPayload(t, "USER@example.com", "secret", tenantID))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
 	router.ServeHTTP(rr, req)
 
+	assert.Equal(t, nethttp.StatusOK, rr.Code)
 	assert.Equal(t, "user@example.com", capturedCmd.Email)
 	assert.Equal(t, "secret", capturedCmd.Password)
-	assert.Equal(t, nethttp.StatusOK, rr.Code)
 	assert.Contains(t, rr.Body.String(), "token.value")
 	assert.Contains(t, rr.Body.String(), userID.String())
+}
+
+func TestNewRouter_LoginInvalidCredentials(t *testing.T) {
+	t.Parallel()
+
+	tenantID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+
+	executor := mockcommand.NewMockLoginExecutor(t)
+	executor.EXPECT().Execute(mock.Anything, mock.Anything).Return(command.LoginResult{}, apperrors.ErrInvalidCredentials)
+
+	router := NewRouter(Dependencies{LoginExecutor: executor})
+	req := httptest.NewRequest(nethttp.MethodPost, "/v1/auth/login",
+		loginPayload(t, "user@example.com", "wrong", tenantID))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, nethttp.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), "Unauthorized")
+}
+
+func TestNewRouter_LoginMissingTenantIDRejectedByValidator(t *testing.T) {
+	t.Parallel()
+
+	executor := mockcommand.NewMockLoginExecutor(t)
+	router := NewRouter(Dependencies{LoginExecutor: executor})
+
+	b, err := json.Marshal(map[string]string{"email": "user@example.com", "password": "secret"})
+	require.NoError(t, err)
+	req := httptest.NewRequest(nethttp.MethodPost, "/v1/auth/login", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	// OpenAPI validator rejects the request before it reaches the handler
+	assert.Equal(t, nethttp.StatusBadRequest, rr.Code)
 }

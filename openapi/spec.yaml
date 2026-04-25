@@ -63,18 +63,24 @@ components:
       required:
         - email
         - password
+        - tenant_id
       properties:
         email:
           type: string
           format: email
         password:
           type: string
+        tenant_id:
+          type: string
+          format: uuid
     LoginResponse:
       type: object
       required:
         - access_token
         - token_type
         - user_id
+        - tenant_id
+        - role
       properties:
         access_token:
           type: string
@@ -83,6 +89,11 @@ components:
         user_id:
           type: string
           format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        role:
+          type: string
     Problem:
       type: object
       required:

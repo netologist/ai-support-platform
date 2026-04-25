@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
 package: handlers
-output: internal/transport/http/handlers/handlers_gen.go
+output: internal/transport/http/handlers/handler_gen.go
 generate:
   models: true
   chi-server: true
