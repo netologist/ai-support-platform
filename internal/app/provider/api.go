@@ -83,12 +83,11 @@ func NewRuntime(ctx context.Context, config Config) (Runtime, error) {
 	}
 	closers.Add(kafkaPublisher.Close)
 
-// -------------------------
+    // -------------------------
 	// Repositories
 	// -------------------------
 	queries := sqlc.New(db)
 	authRepository := postgresrepo.NewAuthRepository(queries)
-
     // -------------------------
     // Auth
     // -------------------------
@@ -106,7 +105,7 @@ func NewRuntime(ctx context.Context, config Config) (Runtime, error) {
     // -------------------------
 	// HTTP
 	// -------------------------
-	handler := transporthttp.NewHandler(transporthttp.Dependencies{
+	router := transporthttp.NewRouter(transporthttp.Dependencies{
 		LoginService:           loginService,
 		TokenVerifier:          tokenManager,
 	})
@@ -116,7 +115,7 @@ func NewRuntime(ctx context.Context, config Config) (Runtime, error) {
     // -------------------------
 	server := &http.Server{
 		Addr:              config.HTTPAddress,
-		Handler:           handler,
+		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

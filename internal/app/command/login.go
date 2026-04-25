@@ -38,7 +38,7 @@ func NewLoginService(
 	}
 }
 
-func (service LoginService) Execute(ctx context.Context, command LoginCommand) (LoginResult, error) {
+func (service *LoginService) Execute(ctx context.Context, command LoginCommand) (LoginResult, error) {
 	user, err := service.authRepository.FindUserByEmail(ctx, command.Email)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -48,7 +48,6 @@ func (service LoginService) Execute(ctx context.Context, command LoginCommand) (
 
 		return LoginResult{}, err
 	}
-
 	if err := service.passwordVerifier.Verify(user.PasswordHash, command.Password); err != nil {
 		// TODO: add record audit for invalid password. But we should be careful to not leak information about which emails are registered in the system.
 		return LoginResult{}, apperrors.ErrInvalidCredentials

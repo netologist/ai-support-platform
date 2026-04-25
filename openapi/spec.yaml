@@ -63,7 +63,6 @@ components:
       required:
         - email
         - password
-        - tenant_id
       properties:
         email:
           type: string
