@@ -23,7 +23,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	runtime, err := provider.NewRuntime(ctx, config)
+	runtime, err := provider.NewAPIRuntime(ctx, config)
 	if err != nil {
 		slog.Error("build runtime", slog.Any("error", err))
 		os.Exit(1)
