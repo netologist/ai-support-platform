@@ -74,7 +74,7 @@ func TestLogin(t *testing.T) {
 		wantBody   string
 	}{
 		{
-			name:     "valid credentials returns 200 with token",
+			name: "valid credentials returns 200 with token",
 			buildReq: func(t *testing.T) *http.Request {
 				return loginRequest(t, map[string]string{"email": "user@example.com", "password": "secret"})
 			},
@@ -87,7 +87,7 @@ func TestLogin(t *testing.T) {
 			wantBody:   fixedToken,
 		},
 		{
-			name:     "user not found returns 401",
+			name: "user not found returns 401",
 			buildReq: func(t *testing.T) *http.Request {
 				return loginRequest(t, map[string]string{"email": "nobody@example.com", "password": "pass"})
 			},
@@ -98,7 +98,7 @@ func TestLogin(t *testing.T) {
 			wantBody:   "Unauthorized",
 		},
 		{
-			name:     "wrong password returns 401",
+			name: "wrong password returns 401",
 			buildReq: func(t *testing.T) *http.Request {
 				return loginRequest(t, map[string]string{"email": "user@example.com", "password": "wrong"})
 			},

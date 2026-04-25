@@ -15,8 +15,8 @@ func TestTokenManagerIssueAndVerify(t *testing.T) {
 
 	manager := NewTokenManager("test-issuer", "secret-value", time.Hour)
 	principal := entity.Principal{
-		UserID:   uuid.New(),
-		Email:    "agent@example.com",
+		UserID: uuid.New(),
+		Email:  "agent@example.com",
 	}
 
 	token, err := manager.Issue(principal)

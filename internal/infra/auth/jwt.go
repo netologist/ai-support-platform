@@ -19,7 +19,7 @@ type TokenManager struct {
 }
 
 type claims struct {
-	Email    string `json:"email"`
+	Email string `json:"email"`
 	jwt.RegisteredClaims
 }
 
@@ -31,7 +31,7 @@ func (manager TokenManager) Issue(principal entity.Principal) (string, error) {
 	now := time.Now().UTC()
 	expiresAt := now.Add(manager.ttl)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
-		Email:    principal.Email,
+		Email: principal.Email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    manager.issuer,
 			Subject:   principal.UserID.String(),

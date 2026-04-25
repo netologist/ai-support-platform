@@ -46,4 +46,3 @@ func (repository AuthRepository) FindUserByEmail(ctx context.Context, email stri
 		CreatedAt:    createdAt,
 	}, nil
 }
-

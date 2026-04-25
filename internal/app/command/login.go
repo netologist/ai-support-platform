@@ -10,6 +10,10 @@ import (
 	"github.com/netologist/ai-support-platform/internal/domain/service"
 )
 
+type LoginExecutor interface {
+	Execute(ctx context.Context, cmd LoginCommand) (LoginResult, error)
+}
+
 type LoginCommand struct {
 	Email    string
 	Password string
@@ -30,8 +34,8 @@ func NewLoginService(
 	authRepository repository.AuthRepository,
 	passwordVerifier service.PasswordVerifier,
 	tokenIssuer service.TokenIssuer,
-) LoginService {
-	return LoginService{
+) *LoginService {
+	return &LoginService{
 		authRepository:   authRepository,
 		passwordVerifier: passwordVerifier,
 		tokenIssuer:      tokenIssuer,

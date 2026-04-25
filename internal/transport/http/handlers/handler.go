@@ -15,20 +15,20 @@ import (
 var _ ServerInterface = (*Handlers)(nil)
 
 func New(
-    loginService           command.LoginService,
-	publicRateLimit        int64,
+	loginExecutor command.LoginExecutor,
+	publicRateLimit int64,
 	authenticatedRateLimit int64,
-	rateLimitWindow        time.Duration) *Handlers {
-    return &Handlers{
-        loginService:           loginService,
-        publicRateLimit:        publicRateLimit,
-        authenticatedRateLimit: authenticatedRateLimit,
-        rateLimitWindow:        rateLimitWindow,
-    }
+	rateLimitWindow time.Duration) *Handlers {
+	return &Handlers{
+		loginExecutor:          loginExecutor,
+		publicRateLimit:        publicRateLimit,
+		authenticatedRateLimit: authenticatedRateLimit,
+		rateLimitWindow:        rateLimitWindow,
+	}
 }
 
 type Handlers struct {
-    loginService           command.LoginService
+	loginExecutor          command.LoginExecutor
 	publicRateLimit        int64
 	authenticatedRateLimit int64
 	rateLimitWindow        time.Duration
@@ -36,12 +36,12 @@ type Handlers struct {
 }
 
 func (h *Handlers) GetHealth(w http.ResponseWriter, r *http.Request) {
-    writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	var body LoginRequest
-    decoder := json.NewDecoder(r.Body)
+	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&body); err != nil {
@@ -49,7 +49,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.loginService.Execute(r.Context(), command.LoginCommand{
+	result, err := h.loginExecutor.Execute(r.Context(), command.LoginCommand{
 		Email:    strings.ToLower(string(body.Email)),
 		Password: body.Password,
 	})
@@ -67,6 +67,6 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, LoginResponse{
 		AccessToken: result.AccessToken,
 		TokenType:   "Bearer",
-        UserId: result.Principal.UserID,
+		UserId:      result.Principal.UserID,
 	})
 }
