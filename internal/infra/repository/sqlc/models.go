@@ -49,6 +49,16 @@ type Membership struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type Outbox struct {
+	ID            pgtype.UUID
+	AggregateType string
+	AggregateID   pgtype.UUID
+	EventType     string
+	Payload       []byte
+	CreatedAt     pgtype.Timestamptz
+	SentAt        pgtype.Timestamptz
+}
+
 type Tenant struct {
 	ID        pgtype.UUID
 	Name      string

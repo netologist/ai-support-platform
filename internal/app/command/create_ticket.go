@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -25,6 +26,7 @@ type CreateTicketService struct {
 	auditLogger      service.AuditLogger
 	publisher        service.MessagePublisher
 	topic            string
+	outbox           repository.OutboxRepository
 }
 
 func NewCreateTicketService(
@@ -34,6 +36,7 @@ func NewCreateTicketService(
 	auditLogger service.AuditLogger,
 	publisher service.MessagePublisher,
 	topic string,
+	outbox repository.OutboxRepository,
 ) CreateTicketService {
 	return CreateTicketService{
 		ticketRepository: ticketRepository,
@@ -42,6 +45,7 @@ func NewCreateTicketService(
 		auditLogger:      auditLogger,
 		publisher:        publisher,
 		topic:            topic,
+		outbox:           outbox,
 	}
 }
 
@@ -67,6 +71,22 @@ func (svc CreateTicketService) Execute(ctx context.Context, command CreateTicket
 	createdTicket, err := svc.ticketRepository.Create(ctx, ticket)
 	if err != nil {
 		return entity.Ticket{}, err
+	}
+
+	// Write outbox event for ticket.created
+	if svc.outbox != nil {
+		payload, _ := json.Marshal(map[string]any{
+			"event_type": "ticket.created",
+			"ticket":     createdTicket,
+		})
+		_ = svc.outbox.InsertEvent(ctx, &entity.OutboxEvent{
+			ID:            uuid.New(),
+			AggregateType: "ticket",
+			AggregateID:   createdTicket.ID,
+			EventType:     "ticket.created",
+			Payload:       payload,
+			CreatedAt:     now,
+		})
 	}
 
 	if svc.ticketCache != nil {

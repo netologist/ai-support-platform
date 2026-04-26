@@ -2,8 +2,10 @@ package command
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -27,6 +29,7 @@ type UpdateTicketService struct {
 	auditLogger      service.AuditLogger
 	publisher        service.MessagePublisher
 	topic            string
+	outbox           repository.OutboxRepository
 }
 
 func NewUpdateTicketService(
@@ -36,6 +39,7 @@ func NewUpdateTicketService(
 	auditLogger service.AuditLogger,
 	publisher service.MessagePublisher,
 	topic string,
+	outbox repository.OutboxRepository,
 ) UpdateTicketService {
 	return UpdateTicketService{
 		ticketRepository: ticketRepository,
@@ -44,6 +48,7 @@ func NewUpdateTicketService(
 		auditLogger:      auditLogger,
 		publisher:        publisher,
 		topic:            topic,
+		outbox:           outbox,
 	}
 }
 
@@ -96,6 +101,22 @@ func (svc UpdateTicketService) Execute(ctx context.Context, command UpdateTicket
 		}
 
 		return entity.Ticket{}, err
+	}
+
+	// Write outbox event for ticket.updated
+	if svc.outbox != nil {
+		payload, _ := json.Marshal(map[string]any{
+			"event_type": "ticket.updated",
+			"ticket":     updatedTicket,
+		})
+		_ = svc.outbox.InsertEvent(ctx, &entity.OutboxEvent{
+			ID:            uuid.New(),
+			AggregateType: "ticket",
+			AggregateID:   updatedTicket.ID,
+			EventType:     "ticket.updated",
+			Payload:       payload,
+			CreatedAt:     time.Now().UTC(),
+		})
 	}
 
 	if svc.ticketCache != nil {

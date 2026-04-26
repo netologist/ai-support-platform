@@ -45,6 +45,9 @@ packages:
       ChunkRepository:
         config:
           dir: internal/mocks/repository
+      OutboxRepository:
+        config:
+          dir: internal/mocks/repository
   github.com/netologist/ai-support-platform/internal/domain/service:
     interfaces:
       AuditLogger:

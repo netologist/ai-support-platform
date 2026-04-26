@@ -9,6 +9,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/netologist/ai-support-platform/internal/app/command"
 	"github.com/netologist/ai-support-platform/internal/app/query"
+	infraai "github.com/netologist/ai-support-platform/internal/infra/ai"
+	"github.com/netologist/ai-support-platform/internal/infra/ai/chunking"
 	infraaudit "github.com/netologist/ai-support-platform/internal/infra/audit"
 	infraauth "github.com/netologist/ai-support-platform/internal/infra/auth"
 	infracache "github.com/netologist/ai-support-platform/internal/infra/cache"
@@ -63,12 +65,30 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 	closer.Add(kafkaPublisher.Close)
 
 	// -------------------------
+	// AI
+	// -------------------------
+	aiProviders, err := infraai.NewProviders(ctx, infraai.Config{
+		Provider:       config.AIProvider,
+		Model:          config.AIModel,
+		EmbeddingModel: config.AIEmbeddingModel,
+		APIKey:         config.AIAPIKey,
+	})
+	if err != nil {
+		closer.Close()
+		return APIRuntime{}, fmt.Errorf("build AI provider: %w", err)
+	}
+	closer.AddWithError(aiProviders.Close)
+
+	// -------------------------
 	// Repositories
 	// -------------------------
 	queries := sqlc.New(db)
 	authRepository := postgresrepo.NewAuthRepository(queries)
 	auditRepository := postgresrepo.NewAuditRepository(queries)
 	ticketRepository := postgresrepo.NewTicketRepository(queries)
+	documentRepository := postgresrepo.NewDocumentRepository(queries)
+	chunkRepository := postgresrepo.NewChunkRepository(queries)
+	outboxRepository := postgresrepo.NewOutboxRepository(queries)
 
 	// -------------------------
 	// Auth
@@ -86,7 +106,7 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 	}
 
 	ticketCache := infracache.NewRedisTicketCache(redisClient, config.TicketCacheTTL)
-
+	chunker := chunking.NewSimpleChunker()
 	redisRateLimiter := infracache.NewRedisRateLimiter(redisClient)
 
 	loginService := command.NewLoginService(
@@ -103,6 +123,7 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 		auditLogger,
 		kafkaPublisher,
 		config.KafkaTicketTopic,
+		outboxRepository,
 	)
 
 	updateTicketService := command.NewUpdateTicketService(
@@ -112,6 +133,7 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 		auditLogger,
 		kafkaPublisher,
 		config.KafkaTicketTopic,
+		outboxRepository,
 	)
 
 	getTicketService := query.NewGetTicketService(
@@ -127,6 +149,21 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 		auditLogger,
 	)
 
+	ingestDocumentService := command.NewIngestDocumentService(
+		documentRepository,
+		chunkRepository,
+		chunker,
+		aiProviders.EmbeddingProvider,
+		authorizer,
+		auditLogger,
+	)
+
+	listDocumentsService := query.NewListDocumentsService(
+		documentRepository,
+		authorizer,
+		auditLogger,
+	)
+
 	// -------------------------
 	// HTTP
 	// -------------------------
@@ -136,6 +173,8 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 		UpdateTicketExecutor:   updateTicketService,
 		GetTicketExecutor:      getTicketService,
 		ListTicketsExecutor:    listTicketService,
+		IngestDocumentExecutor: ingestDocumentService,
+		ListDocumentsExecutor:  listDocumentsService,
 		TokenVerifier:          tokenManager,
 		Authorizer:             authorizer,
 		RateLimiter:            redisRateLimiter,

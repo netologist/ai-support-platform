@@ -36,14 +36,14 @@ func TestCreateTicketService_Execute(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		setupMocks  func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher)
+		setupMocks  func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository)
 		useNilDeps  bool
 		wantSubject string
 		wantErr     error
 	}{
 		{
 			name: "creates ticket and returns it",
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, fixedPrincipal, "tickets", "create").Return(nil)
 				repo.EXPECT().Create(mock.Anything, mock.MatchedBy(func(t entity.Ticket) bool {
 					return t.Subject == "My ticket" &&
@@ -57,6 +57,7 @@ func TestCreateTicketService_Execute(t *testing.T) {
 					Status:          entity.TicketStatusOpen,
 					CreatedByUserID: fixedUserID,
 				}, nil)
+				outbox.EXPECT().InsertEvent(mock.Anything, mock.Anything).Return(nil)
 				cache.EXPECT().SetTicket(mock.Anything, mock.Anything).Return(nil)
 				auditor.EXPECT().Record(mock.Anything, mock.MatchedBy(func(log entity.AuditLog) bool {
 					return log.EventType == "ticket.created" && log.Outcome == "success"
@@ -67,21 +68,21 @@ func TestCreateTicketService_Execute(t *testing.T) {
 		},
 		{
 			name: "authorization denied returns ErrForbidden",
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, fixedPrincipal, "tickets", "create").Return(service.ErrPermissionDenied)
 			},
 			wantErr: apperrors.ErrForbidden,
 		},
 		{
 			name: "authorization error propagates",
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, fixedPrincipal, "tickets", "create").Return(errors.New("authz service unavailable"))
 			},
 			wantErr: errors.New("authz service unavailable"),
 		},
 		{
 			name: "repository error propagates",
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, fixedPrincipal, "tickets", "create").Return(nil)
 				repo.EXPECT().Create(mock.Anything, mock.Anything).Return(entity.Ticket{}, errors.New("db write failed"))
 			},
@@ -89,7 +90,7 @@ func TestCreateTicketService_Execute(t *testing.T) {
 		},
 		{
 			name: "nil cache and publisher are safe to omit",
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, fixedPrincipal, "tickets", "create").Return(nil)
 				repo.EXPECT().Create(mock.Anything, mock.Anything).Return(entity.Ticket{
 					ID:      uuid.New(),
@@ -108,6 +109,7 @@ func TestCreateTicketService_Execute(t *testing.T) {
 			repo := mockrepo.NewMockTicketRepository(t)
 			auth := mocksvc.NewMockAuthorizer(t)
 			auditor := mocksvc.NewMockAuditLogger(t)
+			outbox := mockrepo.NewMockOutboxRepository(t)
 
 			var cache *mocksvc.MockTicketCache
 			var pub *mocksvc.MockMessagePublisher
@@ -116,14 +118,14 @@ func TestCreateTicketService_Execute(t *testing.T) {
 				pub = mocksvc.NewMockMessagePublisher(t)
 			}
 
-			tc.setupMocks(repo, auth, cache, auditor, pub)
+			tc.setupMocks(repo, auth, cache, auditor, pub, outbox)
 
 			// Avoid typed-nil interface trap: pass untyped nil when deps are omitted.
 			var svc command.CreateTicketService
 			if tc.useNilDeps {
-				svc = command.NewCreateTicketService(repo, auth, nil, auditor, nil, "")
+				svc = command.NewCreateTicketService(repo, auth, nil, auditor, nil, "", nil)
 			} else {
-				svc = command.NewCreateTicketService(repo, auth, cache, auditor, pub, "tickets")
+				svc = command.NewCreateTicketService(repo, auth, cache, auditor, pub, "tickets", outbox)
 			}
 
 			ticket, err := svc.Execute(context.Background(), newTicketCmd)
