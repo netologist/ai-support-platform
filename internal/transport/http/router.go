@@ -3,9 +3,12 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,13 +24,17 @@ import (
 )
 
 type Dependencies struct {
-	LoginExecutor        executor.LoginExecutor
-	CreateTicketExecutor executor.CreateTicketExecutor
-	UpdateTicketExecutor executor.UpdateTicketExecutor
-	ListTicketsExecutor  executor.ListTicketsExecutor
-	GetTicketExecutor    executor.GetTicketExecutor
-	TokenVerifier        service.TokenVerifier
-	Authorizer           service.Authorizer
+	LoginExecutor          executor.LoginExecutor
+	CreateTicketExecutor   executor.CreateTicketExecutor
+	UpdateTicketExecutor   executor.UpdateTicketExecutor
+	ListTicketsExecutor    executor.ListTicketsExecutor
+	GetTicketExecutor      executor.GetTicketExecutor
+	TokenVerifier          service.TokenVerifier
+	Authorizer             service.Authorizer
+	RateLimiter            service.RateLimiter
+	PublicRateLimit        int64
+	AuthenticatedRateLimit int64
+	RateLimitWindow        time.Duration
 }
 
 func NewRouter(dependencies Dependencies) http.Handler {
@@ -63,13 +70,19 @@ func NewRouter(dependencies Dependencies) http.Handler {
 			dependencies.UpdateTicketExecutor,
 			dependencies.ListTicketsExecutor,
 			dependencies.GetTicketExecutor,
-			100,               // publicRateLimit
-			1000,              // authenticatedRateLimit
-			15*60*time.Second, // rateLimitWindow
+			dependencies.PublicRateLimit,
+			dependencies.AuthenticatedRateLimit,
+			dependencies.RateLimitWindow,
 		), handlers.ChiServerOptions{
 			BaseRouter: r,
 			Middlewares: []handlers.MiddlewareFunc{
 				authorizationGuardMiddleware(dependencies.Authorizer),
+				rateLimitMiddleware(
+					dependencies.RateLimiter,
+					dependencies.PublicRateLimit,
+					dependencies.AuthenticatedRateLimit,
+					dependencies.RateLimitWindow,
+				),
 				authenticatedMiddleware(dependencies.TokenVerifier),
 			},
 		})
@@ -165,6 +178,108 @@ func authenticatedMiddleware(tokenVerifier service.TokenVerifier) handlers.Middl
 			next.ServeHTTP(w, r.WithContext(handlers.WithPrincipal(r.Context(), principal)))
 		})
 	}
+}
+
+func rateLimitMiddleware(
+	limiter service.RateLimiter,
+	publicLimit int64,
+	authenticatedLimit int64,
+	window time.Duration,
+) handlers.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if limiter == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			key, limit := buildRateLimitKeyAndLimit(r, publicLimit, authenticatedLimit)
+			result, err := limiter.Allow(r.Context(), key, limit, window)
+			if err != nil {
+				// fail-open tercih: limiter down olsa bile request devam etsin
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			setRateLimitHeaders(w, result)
+
+			if !result.Allowed {
+				writeTooManyRequests(w, result.RetryAfter)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func setRateLimitHeaders(w http.ResponseWriter, result service.RateLimitResult) {
+	remaining := result.Limit - result.Count
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	w.Header().Set("X-RateLimit-Limit", strconv.FormatInt(result.Limit, 10))
+	w.Header().Set("X-RateLimit-Remaining", strconv.FormatInt(remaining, 10))
+	w.Header().Set("Retry-After", strconv.FormatInt(int64(result.RetryAfter.Seconds()), 10))
+}
+
+func writeTooManyRequests(w http.ResponseWriter, retryAfter time.Duration) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Retry-After", strconv.FormatInt(int64(retryAfter.Seconds()), 10))
+	w.WriteHeader(http.StatusTooManyRequests)
+
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"type":   "about:blank",
+		"title":  "Too Many Requests",
+		"status": http.StatusTooManyRequests,
+		"detail": "rate limit exceeded",
+	})
+}
+
+func buildRateLimitKeyAndLimit(
+	r *http.Request,
+	publicLimit int64,
+	authenticatedLimit int64,
+) (string, int64) {
+	route := normalizeRoute(r.Method, r.URL.Path)
+
+	principal, ok := handlers.PrincipalFromContext(r.Context())
+	if ok {
+		key := fmt.Sprintf("auth:%s:%s:%s:%s",
+			principal.TenantID.String(),
+			principal.UserID.String(),
+			r.Method,
+			route,
+		)
+		return key, authenticatedLimit
+	}
+
+	ip := clientIP(r)
+	key := fmt.Sprintf("public:%s:%s:%s", ip, r.Method, route)
+	return key, publicLimit
+}
+
+func normalizeRoute(method, p string) string {
+	// dinamik pathleri tek bucketta topla
+	if strings.HasPrefix(p, "/v1/tickets/") {
+		return "/v1/tickets/{ticketID}"
+	}
+	return p
+}
+
+func clientIP(r *http.Request) string {
+	xff := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-For"), ",")[0])
+	if xff != "" {
+		return xff
+	}
+
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil && host != "" {
+		return host
+	}
+
+	return r.RemoteAddr
 }
 
 func bearerTokenFromAuthorizationHeader(header string) (string, error) {

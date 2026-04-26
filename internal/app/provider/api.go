@@ -87,6 +87,8 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 
 	ticketCache := infracache.NewRedisTicketCache(redisClient, config.TicketCacheTTL)
 
+	redisRateLimiter := infracache.NewRedisRateLimiter(redisClient)
+
 	loginService := command.NewLoginService(
 		authRepository,
 		infraauth.PasswordVerifier{},
@@ -129,13 +131,17 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 	// HTTP
 	// -------------------------
 	router := transporthttp.NewRouter(transporthttp.Dependencies{
-		LoginExecutor:        loginService,
-		CreateTicketExecutor: createTicketService,
-		UpdateTicketExecutor: updateTicketService,
-		GetTicketExecutor:    getTicketService,
-		ListTicketsExecutor:  listTicketService,
-		TokenVerifier:        tokenManager,
-		Authorizer:           authorizer,
+		LoginExecutor:          loginService,
+		CreateTicketExecutor:   createTicketService,
+		UpdateTicketExecutor:   updateTicketService,
+		GetTicketExecutor:      getTicketService,
+		ListTicketsExecutor:    listTicketService,
+		TokenVerifier:          tokenManager,
+		Authorizer:             authorizer,
+		RateLimiter:            redisRateLimiter,
+		PublicRateLimit:        config.PublicRateLimit,
+		AuthenticatedRateLimit: config.AuthenticatedRateLimit,
+		RateLimitWindow:        config.RateLimitWindow,
 	})
 
 	// -------------------------
