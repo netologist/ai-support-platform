@@ -2,10 +2,13 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
@@ -47,18 +50,84 @@ func NewRouter(dependencies Dependencies) http.Handler {
 	})
 
 	router.Group(func(r chi.Router) {
-		r.Use(nethttpmiddleware.OapiRequestValidator(swagger))
-		handlers.HandlerFromMux(handlers.New(
+		r.Use(nethttpmiddleware.OapiRequestValidatorWithOptions(swagger, &nethttpmiddleware.Options{
+			Options: openapi3filter.Options{
+				AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
+			},
+		}))
+		handlers.HandlerWithOptions(handlers.New(
 			dependencies.LoginExecutor,
 			dependencies.CreateTicketExecutor,
 			dependencies.UpdateTicketExecutor,
-            dependencies.ListTicketsExecutor,
-            dependencies.GetTicketExecutor,
+			dependencies.ListTicketsExecutor,
+			dependencies.GetTicketExecutor,
 			100,               // publicRateLimit
 			1000,              // authenticatedRateLimit
 			15*60*time.Second, // rateLimitWindow
-		), r)
+		), handlers.ChiServerOptions{
+			BaseRouter: r,
+			Middlewares: []handlers.MiddlewareFunc{
+				authenticatedMiddleware(dependencies.TokenVerifier),
+			},
+		})
 	})
 
 	return router
+}
+
+var errUnauthorized = errors.New("unauthorized")
+
+func authenticatedMiddleware(tokenVerifier service.TokenVerifier) handlers.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, requiresAuth := r.Context().Value(handlers.BearerAuthScopes).([]string); !requiresAuth {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if tokenVerifier == nil {
+				writeUnauthorized(w, r)
+				return
+			}
+
+			token, err := bearerTokenFromAuthorizationHeader(r.Header.Get("Authorization"))
+			if err != nil {
+				writeUnauthorized(w, r)
+				return
+			}
+
+			principal, err := tokenVerifier.Verify(token)
+			if err != nil {
+				writeUnauthorized(w, r)
+				return
+			}
+
+			next.ServeHTTP(w, r.WithContext(handlers.WithPrincipal(r.Context(), principal)))
+		})
+	}
+}
+
+func bearerTokenFromAuthorizationHeader(header string) (string, error) {
+	const prefix = "Bearer "
+	if !strings.HasPrefix(strings.ToLower(header), strings.ToLower(prefix)) {
+		return "", errUnauthorized
+	}
+
+	token := strings.TrimSpace(header[len(prefix):])
+	if token == "" {
+		return "", errUnauthorized
+	}
+
+	return token, nil
+}
+
+func writeUnauthorized(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"type":   "about:blank",
+		"title":  "Unauthorized",
+		"status": http.StatusUnauthorized,
+		"detail": "missing or invalid bearer token",
+	})
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	nethttp "net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,9 +16,23 @@ import (
 
 	"github.com/netologist/ai-support-platform/internal/app/command"
 	apperrors "github.com/netologist/ai-support-platform/internal/app/errors"
+	"github.com/netologist/ai-support-platform/internal/app/query"
 	"github.com/netologist/ai-support-platform/internal/domain/entity"
 	mockcommand "github.com/netologist/ai-support-platform/internal/mocks/command"
+	mockexecutor "github.com/netologist/ai-support-platform/internal/mocks/executor"
 )
+
+type stubTokenVerifier struct {
+	verifyFn func(token string) (entity.Principal, error)
+}
+
+func (stub stubTokenVerifier) Verify(token string) (entity.Principal, error) {
+	if stub.verifyFn == nil {
+		return entity.Principal{}, errors.New("verifyFn is nil")
+	}
+
+	return stub.verifyFn(token)
+}
 
 // loginPayload builds a valid login JSON body as required by the OpenAPI schema.
 func loginPayload(t *testing.T, email, password string, tenantID uuid.UUID) *bytes.Reader {
@@ -145,4 +160,91 @@ func TestNewRouter_LoginMissingTenantIDRejectedByValidator(t *testing.T) {
 
 	// OpenAPI validator rejects the request before it reaches the handler
 	assert.Equal(t, nethttp.StatusBadRequest, rr.Code)
+}
+
+func TestNewRouter_TicketsRequiresAuthentication(t *testing.T) {
+	t.Parallel()
+
+	loginExecutor := mockcommand.NewMockLoginExecutor(t)
+	listExecutor := mockexecutor.NewMockListTicketsExecutor(t)
+
+	router := NewRouter(Dependencies{
+		LoginExecutor:       loginExecutor,
+		ListTicketsExecutor: listExecutor,
+	})
+
+	req := httptest.NewRequest(nethttp.MethodGet, "/v1/tickets", nil)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, nethttp.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), "Unauthorized")
+}
+
+func TestNewRouter_TicketsRejectsInvalidToken(t *testing.T) {
+	t.Parallel()
+
+	loginExecutor := mockcommand.NewMockLoginExecutor(t)
+	listExecutor := mockexecutor.NewMockListTicketsExecutor(t)
+
+	router := NewRouter(Dependencies{
+		LoginExecutor:       loginExecutor,
+		ListTicketsExecutor: listExecutor,
+		TokenVerifier: stubTokenVerifier{
+			verifyFn: func(_ string) (entity.Principal, error) {
+				return entity.Principal{}, errors.New("invalid token")
+			},
+		},
+	})
+
+	req := httptest.NewRequest(nethttp.MethodGet, "/v1/tickets", nil)
+	req.Header.Set("Authorization", "Bearer invalid")
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, nethttp.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), "Unauthorized")
+}
+
+func TestNewRouter_TicketsAllowsValidToken(t *testing.T) {
+	t.Parallel()
+
+	loginExecutor := mockcommand.NewMockLoginExecutor(t)
+	listExecutor := mockexecutor.NewMockListTicketsExecutor(t)
+
+	expectedPrincipal := entity.Principal{
+		UserID:   uuid.MustParse("55555555-5555-5555-5555-555555555555"),
+		TenantID: uuid.MustParse("66666666-6666-6666-6666-666666666666"),
+		Role:     "agent",
+	}
+
+	listExecutor.EXPECT().Execute(mock.Anything, mock.MatchedBy(func(q query.ListTicketsQuery) bool {
+		return q.Principal.UserID == expectedPrincipal.UserID &&
+			q.Principal.TenantID == expectedPrincipal.TenantID &&
+			q.Principal.Role == expectedPrincipal.Role
+	})).Return([]entity.Ticket{}, nil)
+
+	router := NewRouter(Dependencies{
+		LoginExecutor:       loginExecutor,
+		ListTicketsExecutor: listExecutor,
+		TokenVerifier: stubTokenVerifier{
+			verifyFn: func(token string) (entity.Principal, error) {
+				if token != "valid-token" {
+					return entity.Principal{}, errors.New("invalid token")
+				}
+
+				return expectedPrincipal, nil
+			},
+		},
+	})
+
+	req := httptest.NewRequest(nethttp.MethodGet, "/v1/tickets", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, nethttp.StatusOK, rr.Code)
 }
