@@ -1,0 +1,18 @@
+p, admin, tickets, read
+p, admin, tickets, create
+p, admin, tickets, update
+p, admin, documents, read
+p, admin, documents, create
+
+p, agent, tickets, read
+p, agent, tickets, create
+p, agent, tickets, update
+p, agent, documents, read
+p, agent, documents, create
+
+p, viewer, tickets, read
+p, viewer, documents, read
+
+g, admin, admin
+g, agent, agent
+g, viewer, viewer

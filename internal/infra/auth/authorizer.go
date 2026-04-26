@@ -2,31 +2,22 @@ package auth
 
 import (
 	"context"
+	_ "embed"
 	"strings"
 
 	"github.com/casbin/casbin/v2"
 	casbinmodel "github.com/casbin/casbin/v2/model"
+	stringadapter "github.com/casbin/casbin/v2/persist/string-adapter"
 
 	"github.com/netologist/ai-support-platform/internal/domain/entity"
 	"github.com/netologist/ai-support-platform/internal/domain/service"
 )
 
-const modelDefinition = `
-[request_definition]
-r = sub, obj, act
+//go:embed casbin/model.conf
+var modelDefinition string
 
-[policy_definition]
-p = sub, obj, act
-
-[role_definition]
-g = _, _
-
-[policy_effect]
-e = some(where (p.eft == allow))
-
-[matchers]
-m = g(r.sub, p.sub) && r.obj == p.obj && r.act == p.act
-`
+//go:embed casbin/policy.csv
+var policyDefinition string
 
 type Authorizer struct {
 	enforcer *casbin.Enforcer
@@ -38,38 +29,14 @@ func NewAuthorizer() (Authorizer, error) {
 		return Authorizer{}, err
 	}
 
-	enforcer, err := casbin.NewEnforcer(model)
+	adapter := stringadapter.NewAdapter(policyDefinition)
+	enforcer, err := casbin.NewEnforcer(model, adapter)
 	if err != nil {
 		return Authorizer{}, err
 	}
 
-	policies := [][]string{
-		{"admin", "tickets", "read"},
-		{"admin", "tickets", "create"},
-		{"admin", "tickets", "update"},
-		{"admin", "documents", "read"},
-		{"admin", "documents", "create"},
-		{"agent", "tickets", "read"},
-		{"agent", "tickets", "create"},
-		{"agent", "tickets", "update"},
-		{"agent", "documents", "read"},
-		{"agent", "documents", "create"},
-		{"viewer", "tickets", "read"},
-		{"viewer", "documents", "read"},
-	}
-
-	for _, policy := range policies {
-		_, err = enforcer.AddPolicy(policy)
-		if err != nil {
-			return Authorizer{}, err
-		}
-	}
-
-	for _, role := range []string{"admin", "agent", "viewer"} {
-		_, err = enforcer.AddGroupingPolicy(role, role)
-		if err != nil {
-			return Authorizer{}, err
-		}
+	if err = enforcer.LoadPolicy(); err != nil {
+		return Authorizer{}, err
 	}
 
 	return Authorizer{enforcer: enforcer}, nil

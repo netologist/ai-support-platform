@@ -18,8 +18,10 @@ import (
 	apperrors "github.com/netologist/ai-support-platform/internal/app/errors"
 	"github.com/netologist/ai-support-platform/internal/app/query"
 	"github.com/netologist/ai-support-platform/internal/domain/entity"
+	"github.com/netologist/ai-support-platform/internal/domain/service"
 	mockcommand "github.com/netologist/ai-support-platform/internal/mocks/command"
 	mockexecutor "github.com/netologist/ai-support-platform/internal/mocks/executor"
+	mockservice "github.com/netologist/ai-support-platform/internal/mocks/service"
 )
 
 type stubTokenVerifier struct {
@@ -247,4 +249,46 @@ func TestNewRouter_TicketsAllowsValidToken(t *testing.T) {
 	router.ServeHTTP(rr, req)
 
 	assert.Equal(t, nethttp.StatusOK, rr.Code)
+}
+
+func TestNewRouter_CreateTicketDeniedByRouteAuthorizationGuard(t *testing.T) {
+	t.Parallel()
+
+	loginExecutor := mockcommand.NewMockLoginExecutor(t)
+	createExecutor := mockexecutor.NewMockCreateTicketExecutor(t)
+	authorizer := mockservice.NewMockAuthorizer(t)
+
+	viewerPrincipal := entity.Principal{
+		UserID:   uuid.MustParse("77777777-7777-7777-7777-777777777777"),
+		TenantID: uuid.MustParse("88888888-8888-8888-8888-888888888888"),
+		Role:     "viewer",
+	}
+
+	authorizer.EXPECT().Authorize(mock.Anything, viewerPrincipal, "tickets", "create").Return(service.ErrPermissionDenied)
+
+	router := NewRouter(Dependencies{
+		LoginExecutor:        loginExecutor,
+		CreateTicketExecutor: createExecutor,
+		TokenVerifier: stubTokenVerifier{
+			verifyFn: func(token string) (entity.Principal, error) {
+				if token != "viewer-token" {
+					return entity.Principal{}, errors.New("invalid token")
+				}
+
+				return viewerPrincipal, nil
+			},
+		},
+		Authorizer: authorizer,
+	})
+
+	body := bytes.NewReader([]byte(`{"subject":"Need help"}`))
+	req := httptest.NewRequest(nethttp.MethodPost, "/v1/tickets", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer viewer-token")
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, nethttp.StatusForbidden, rr.Code)
+	assert.Contains(t, rr.Body.String(), "Forbidden")
 }

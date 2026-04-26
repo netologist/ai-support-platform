@@ -112,18 +112,18 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 		config.KafkaTicketTopic,
 	)
 
-    getTicketService := query.NewGetTicketService(
-        ticketRepository,
-        authorizer,
-        ticketCache,
-        auditLogger,
-    )
+	getTicketService := query.NewGetTicketService(
+		ticketRepository,
+		authorizer,
+		ticketCache,
+		auditLogger,
+	)
 
-    listTicketService := query.NewListTicketsService(
-        ticketRepository,
-        authorizer,
-        auditLogger,
-    )
+	listTicketService := query.NewListTicketsService(
+		ticketRepository,
+		authorizer,
+		auditLogger,
+	)
 
 	// -------------------------
 	// HTTP
@@ -132,9 +132,10 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 		LoginExecutor:        loginService,
 		CreateTicketExecutor: createTicketService,
 		UpdateTicketExecutor: updateTicketService,
-        GetTicketExecutor:    getTicketService,
-        ListTicketsExecutor:  listTicketService,
+		GetTicketExecutor:    getTicketService,
+		ListTicketsExecutor:  listTicketService,
 		TokenVerifier:        tokenManager,
+		Authorizer:           authorizer,
 	})
 
 	// -------------------------
