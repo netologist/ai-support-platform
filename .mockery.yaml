@@ -5,13 +5,11 @@ resolve-type-alias: false
 disable-version-string: true
 issue-845-fix: true
 packages:
-  github.com/netologist/ai-support-platform/internal/app/command:
+  github.com/netologist/ai-support-platform/internal/app/executor:
     interfaces:
       LoginExecutor:
         config:
           dir: internal/mocks/command
-  github.com/netologist/ai-support-platform/internal/app/executor:
-    interfaces:
       CreateTicketExecutor:
         config:
           dir: internal/mocks/executor
@@ -24,12 +22,27 @@ packages:
       ListTicketsExecutor:
         config:
           dir: internal/mocks/executor
+      IngestDocumentExecutor:
+        config:
+          dir: internal/mocks/executor
+      ListDocumentsExecutor:
+        config:
+          dir: internal/mocks/executor
+      SemanticSearchExecutor:
+        config:
+          dir: internal/mocks/executor
   github.com/netologist/ai-support-platform/internal/domain/repository:
     interfaces:
       AuthRepository:
         config:
           dir: internal/mocks/repository
       TicketRepository:
+        config:
+          dir: internal/mocks/repository
+      DocumentRepository:
+        config:
+          dir: internal/mocks/repository
+      ChunkRepository:
         config:
           dir: internal/mocks/repository
   github.com/netologist/ai-support-platform/internal/domain/service:
@@ -50,5 +63,17 @@ packages:
         config:
           dir: internal/mocks/service
       TokenIssuer:
+        config:
+          dir: internal/mocks/service
+      Chunker:
+        config:
+          dir: internal/mocks/service
+      EmbeddingProvider:
+        config:
+          dir: internal/mocks/service
+      RateLimiter:
+        config:
+          dir: internal/mocks/service
+      AIProvider:
         config:
           dir: internal/mocks/service

@@ -206,6 +206,69 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Problem"
+  /v1/documents:
+    get:
+      operationId: listDocuments
+      summary: List knowledge documents for the authenticated tenant
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Documents found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocumentResponse"
+        "401":
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    post:
+      operationId: ingestDocument
+      summary: Ingest a knowledge document and generate document chunks
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestDocumentRequest"
+      responses:
+        "201":
+          description: Document ingested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentResponse"
+        "400":
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
 
 components:
   securitySchemes:
@@ -293,6 +356,45 @@ components:
           type: string
           format: uuid
           nullable: true
+    IngestDocumentRequest:
+      type: object
+      required:
+        - title
+        - source_uri
+        - content
+      properties:
+        title:
+          type: string
+        source_uri:
+          type: string
+        content:
+          type: string
+    DocumentResponse:
+      type: object
+      required:
+        - id
+        - tenant_id
+        - title
+        - source_uri
+        - created_by_user_id
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        source_uri:
+          type: string
+        created_by_user_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
     Problem:
       type: object
       required:

@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
@@ -47,6 +48,23 @@ func (e UpdateTicketRequestStatus) Valid() bool {
 // CreateTicketRequest defines model for CreateTicketRequest.
 type CreateTicketRequest struct {
 	Subject string `json:"subject"`
+}
+
+// DocumentResponse defines model for DocumentResponse.
+type DocumentResponse struct {
+	CreatedAt       time.Time          `json:"created_at"`
+	CreatedByUserId openapi_types.UUID `json:"created_by_user_id"`
+	Id              openapi_types.UUID `json:"id"`
+	SourceUri       string             `json:"source_uri"`
+	TenantId        openapi_types.UUID `json:"tenant_id"`
+	Title           string             `json:"title"`
+}
+
+// IngestDocumentRequest defines model for IngestDocumentRequest.
+type IngestDocumentRequest struct {
+	Content   string `json:"content"`
+	SourceUri string `json:"source_uri"`
+	Title     string `json:"title"`
 }
 
 // LoginRequest defines model for LoginRequest.
@@ -97,6 +115,9 @@ type UpdateTicketRequestStatus string
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
+// IngestDocumentJSONRequestBody defines body for IngestDocument for application/json ContentType.
+type IngestDocumentJSONRequestBody = IngestDocumentRequest
+
 // CreateTicketJSONRequestBody defines body for CreateTicket for application/json ContentType.
 type CreateTicketJSONRequestBody = CreateTicketRequest
 
@@ -111,6 +132,12 @@ type ServerInterface interface {
 	// Login and issue a JWT access token
 	// (POST /v1/auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
+	// List knowledge documents for the authenticated tenant
+	// (GET /v1/documents)
+	ListDocuments(w http.ResponseWriter, r *http.Request)
+	// Ingest a knowledge document and generate document chunks
+	// (POST /v1/documents)
+	IngestDocument(w http.ResponseWriter, r *http.Request)
 	// List tickets for the authenticated tenant
 	// (GET /v1/tickets)
 	ListTickets(w http.ResponseWriter, r *http.Request)
@@ -138,6 +165,18 @@ func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
 // Login and issue a JWT access token
 // (POST /v1/auth/login)
 func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List knowledge documents for the authenticated tenant
+// (GET /v1/documents)
+func (_ Unimplemented) ListDocuments(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Ingest a knowledge document and generate document chunks
+// (POST /v1/documents)
+func (_ Unimplemented) IngestDocument(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -193,6 +232,46 @@ func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Login(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDocuments operation middleware
+func (siw *ServerInterfaceWrapper) ListDocuments(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDocuments(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IngestDocument operation middleware
+func (siw *ServerInterfaceWrapper) IngestDocument(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IngestDocument(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -424,6 +503,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/v1/auth/login", wrapper.Login)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/documents", wrapper.ListDocuments)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/documents", wrapper.IngestDocument)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/v1/tickets", wrapper.ListTickets)
 	})
 	r.Group(func(r chi.Router) {
@@ -488,6 +573,84 @@ type Login401JSONResponse Problem
 func (response Login401JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListDocumentsRequestObject struct {
+}
+
+type ListDocumentsResponseObject interface {
+	VisitListDocumentsResponse(w http.ResponseWriter) error
+}
+
+type ListDocuments200JSONResponse []DocumentResponse
+
+func (response ListDocuments200JSONResponse) VisitListDocumentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListDocuments401JSONResponse Problem
+
+func (response ListDocuments401JSONResponse) VisitListDocumentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListDocuments403JSONResponse Problem
+
+func (response ListDocuments403JSONResponse) VisitListDocumentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type IngestDocumentRequestObject struct {
+	Body *IngestDocumentJSONRequestBody
+}
+
+type IngestDocumentResponseObject interface {
+	VisitIngestDocumentResponse(w http.ResponseWriter) error
+}
+
+type IngestDocument201JSONResponse DocumentResponse
+
+func (response IngestDocument201JSONResponse) VisitIngestDocumentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type IngestDocument400JSONResponse Problem
+
+func (response IngestDocument400JSONResponse) VisitIngestDocumentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type IngestDocument401JSONResponse Problem
+
+func (response IngestDocument401JSONResponse) VisitIngestDocumentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type IngestDocument403JSONResponse Problem
+
+func (response IngestDocument403JSONResponse) VisitIngestDocumentResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -685,6 +848,12 @@ type StrictServerInterface interface {
 	// Login and issue a JWT access token
 	// (POST /v1/auth/login)
 	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
+	// List knowledge documents for the authenticated tenant
+	// (GET /v1/documents)
+	ListDocuments(ctx context.Context, request ListDocumentsRequestObject) (ListDocumentsResponseObject, error)
+	// Ingest a knowledge document and generate document chunks
+	// (POST /v1/documents)
+	IngestDocument(ctx context.Context, request IngestDocumentRequestObject) (IngestDocumentResponseObject, error)
 	// List tickets for the authenticated tenant
 	// (GET /v1/tickets)
 	ListTickets(ctx context.Context, request ListTicketsRequestObject) (ListTicketsResponseObject, error)
@@ -776,6 +945,61 @@ func (sh *strictHandler) Login(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(LoginResponseObject); ok {
 		if err := validResponse.VisitLoginResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListDocuments operation middleware
+func (sh *strictHandler) ListDocuments(w http.ResponseWriter, r *http.Request) {
+	var request ListDocumentsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListDocuments(ctx, request.(ListDocumentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListDocuments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListDocumentsResponseObject); ok {
+		if err := validResponse.VisitListDocumentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// IngestDocument operation middleware
+func (sh *strictHandler) IngestDocument(w http.ResponseWriter, r *http.Request) {
+	var request IngestDocumentRequestObject
+
+	var body IngestDocumentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.IngestDocument(ctx, request.(IngestDocumentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IngestDocument")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(IngestDocumentResponseObject); ok {
+		if err := validResponse.VisitIngestDocumentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -900,24 +1124,26 @@ func (sh *strictHandler) UpdateTicket(w http.ResponseWriter, r *http.Request, ti
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+xYXW/bNhf+KwTf91KInKUXhe6yFdlcdECwZOtFYBg0dWyxkUiVPHTnBfrvAz8ky5bs",
-	"uktqYFiuokhH5+M5zzkP5SfKVVUrCRINzZ6o4QVUzF/+pIEh3Av+CPgbfLZg0N2utapBo4BgbxefgPsH",
-	"uKmBZtSgFnJFmyahGj5boSGn2UNnOEtaQxVuNAn9oFZCHgwBFROlu1gqXTGkWbyT7EdMaM2M+aJ0PpJO",
-	"QhEkkzgX+Y4va0U+dLWXfBuw89/3dqQiUytpYFgS4xyMmaN6BDmaq1YlPLuIhPoA83B7xJk1oP8RHjv5",
-	"74TZOu3nGgsaQ+pWq0UJ1RCjHDD2fZA3aK10ADLPBQolWXm787JAqMw4gOEG05ptev9vE9KBhxGXwfsG",
-	"Gdq+ayERVqC9L4GH2jbegj1YI4LBTRdqDLV2Kg8SzBixkpDPUc2PdFnasmQLlzNqCyME4n4H5PPFZn46",
-	"WRJ6otkAy96jg3vlWYM84GUbp0tmtOaxFvxe5yesx65CkLZyGajajwwvlYG+41NKH9LVmQO3WuDmzm3u",
-	"EHUBTIO+tlhs/7tpcXr/8d5V661pFp9ugSsQa9o4x0IulU8isJpeT8mdrWulkdyWDB3w5Pp2ShO6Bm2E",
-	"kjSjk4vLi4krwpXJakEzenUxubjyuxMLn11aACux+Mtdr8DX6SBjbo6nOc3oz4C/eBO3NyLF/Zs/TCbu",
-	"D1cSQfoXWV2XgvtX009Gya2EHevFV5Tq0Ng5wxwM16LGUO4d6LXgQIQhoahNaImtKqY3NKOhDsIL4I/+",
-	"Ubq+TJnFIi2dQvgklRnBwAsI7bbRjyrffFPp/9ewpBn9X7qV9zRqe7ojt81u+W4PNM+E/YTYcW+NQOoN",
-	"iLFeYZa2dGR684IJtHozEvoPVorc+yRLJkqrIQS/PEfwqVy78IRryEGiYKXZ41JAhsmcCGMsEEbef7wn",
-	"QYpJkOKWYei3kjk4YR+Ewfto88xmd0p7rO49uRrI8BCOmB1ZKivzM7bhV2GMkCuiNBGxIxFal8LVOVK4",
-	"UXoh8jy2s13vNHvYXewPs2a2Qw9hkGAHmyZYAHGrxrGJO0UjQfj8QXl06fRP/N9p94x9VJy0gl6u+/tk",
-	"PEQ+Eg8C/5UN9O+lfiAVYUTClzgC+6swfQoX03fNsXNHx/2aaVYBgvvMeHiiTqr9CcYdmpk/OLX+6D53",
-	"kx4OXzudzr6j1J7M896OfWX5eVnuYr45R8zYaqm6dn/LgN0A8oKwOFtksSHTd+H3FuTFcJD6n0ZnnqWX",
-	"V6yx77wzH5pPnmTrc32d5ddZPjzLgc+ESQJ/CoMOv04yvR+9bifV6jL+IpClaak4KwtlMHs7eTuhzaz5",
-	"OwAA///IV7crPBYAAA==",
+	"H4sIAAAAAAAC/+xYUW/bNhD+KwS3Ry921z4UeusWZHPRAUGTrQ9BYNDk2WIjkSp5TOYF/u8DSUmWbNpR",
+	"lsTYsLzZFMm7++6770jeU67LSitQaGl2Ty3PoWTh588GGMKl5DeAn+GbA4t+uDK6AoMS4nw3/wo8fMBV",
+	"BTSjFo1US7pej6iBb04aEDS7aidej5qJOg6sR/RUc1eCws9gK60s7JrhwRcxY8HSQpvS/6KCIfyAsgQ6",
+	"2jY/atfMVzNnwcyk6K11TorUsoHTrHaGw8wZmYh9RBEUUzjUJkos4GEM4+J252Zdz5lk3KMugKkMTNUS",
+	"LG7ysCfbXCsEhcmIHwJkWIjpiGqzKc8/6aVUex2Gksmil4I4kshBxay900Y8OZ1bETUG2/27ux2IaF8p",
+	"MM7B2hnqG1BJX41OAv1oTnoDszic2Gx4SW3h0fO/Z2azaZ/lIaAUUudGzwsodzESgHXed/wGY7SJQAoh",
+	"UWrFivPeYolQ2jSAcYAZw1ad/xuHTORhjctuiSBD191aKoQlmEP10Vh5sHAigm39RFMp1BpF30swa+VS",
+	"gZihPiScyhUFm3uf0Tg4vv5uY9n5tLcnPamQd3jZ2GmdScacSsHvlRjQWtsIQbnSe6CrUDK80Ba6Gw8J",
+	"fZeufjpwZySuLnzXj1bnwAyYDw7zzb+zBqePXy59tGE2zeqvG+ByxIqu/cZSLXRwIrKafpiSC1dV2iA5",
+	"Lxh64MmH8ykd0VswVmpFMzo5eXMy8UH4MFklaUbfnkxO3gbtxDx4N86BFZj/5X8vIcTpIWO+jqeCZvQX",
+	"wF/DFK8bNcXDyh8nk60OxqqqkDwsHX+1Wm2OP4dy8cApZ1/Z+YkCLDeywhjuBZhbyYFIS2JQq5gSV5bM",
+	"rGhGYxyE58Bvwqfx7Zsxc5iPC98hgpPaJjAIDYS2avSTFqtHhf69gQXN6HfjzdFwXJ8Lx712u+6H73Vg",
+	"/UTYB9iudSsBaZhArAsdZuEKT6Z3z+hA028Spv9ghRRhT7JgsnAGovE3xzA+VbfePOEGBCiUrLBbXIrI",
+	"MCWItNYBYeTjl0sSWzGJrbhhmKgPgXZvjX2Sm6OifWqdtd32UOw7F4SdZrwLSushWWinxBHT8Zu0Vqol",
+	"0YbIOjM1xN6Ft8dw4UybuRSiTmsj8zS76gv81fX6ukcTaZHcKH1XgFgCER0IDcEciJcfzzDuuxyJzTAc",
+	"npNC1L9VvJAipa8ug6Tp+diwS9D9hCQyeAzi/yJP/916iNwiLFETQUyXoDzfO6M8d+rGtmKK4Yh3WEov",
+	"6znHENKts/8AGa29exXRx4kotrD9E+HsPr29kGymXveOLJrbZNxHPlLfql718t9O/UgqwoiCu7oEtqVw",
+	"fB9/TE/Xhy5xLfcrZlgJCMYG6/7eE66DdEQVC7fQZj+6zd1RB4eHrvrXL3hvGczzjsa+svy4LPc23x3D",
+	"Zp1qpdt0P6bAzgB5TlhdW2S+ItPT+HiNPN8tpO4705Fr6fk7VurR7MgvEIMr2QVfX2v5tZb313LkM2GK",
+	"wJ/SosevbZlhH3PbVKozRf28mo3HheasyLXF7P3k/YSur9d/BwAA//8BLzWtxR0AAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

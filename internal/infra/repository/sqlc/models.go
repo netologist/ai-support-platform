@@ -6,6 +6,7 @@ package sqlc
 
 import (
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/pgvector/pgvector-go"
 )
 
 type AuditLog struct {
@@ -19,6 +20,26 @@ type AuditLog struct {
 	Resource   string
 	ResourceID string
 	Metadata   []byte
+}
+
+type DocumentChunk struct {
+	ID             pgtype.UUID
+	DocumentID     pgtype.UUID
+	TenantID       pgtype.UUID
+	ChunkIndex     int32
+	Content        string
+	EmbeddingModel string
+	Embedding      pgvector.Vector
+	CreatedAt      pgtype.Timestamptz
+}
+
+type KnowledgeDocument struct {
+	ID              pgtype.UUID
+	TenantID        pgtype.UUID
+	Title           string
+	SourceUri       string
+	CreatedByUserID pgtype.UUID
+	CreatedAt       pgtype.Timestamptz
 }
 
 type Membership struct {

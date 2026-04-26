@@ -6,6 +6,7 @@ import (
 	context "context"
 
 	command "github.com/netologist/ai-support-platform/internal/app/command"
+
 	entity "github.com/netologist/ai-support-platform/internal/domain/entity"
 
 	mock "github.com/stretchr/testify/mock"
@@ -52,13 +53,23 @@ func (_m *MockUpdateTicketExecutor) Execute(ctx context.Context, cmd command.Upd
 	return r0, r1
 }
 
+// MockUpdateTicketExecutor_Execute_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Execute'
+type MockUpdateTicketExecutor_Execute_Call struct {
+	*mock.Call
+}
+
 // Execute is a helper method to define mock.On call
+//   - ctx context.Context
+//   - cmd command.UpdateTicketCommand
 func (_e *MockUpdateTicketExecutor_Expecter) Execute(ctx interface{}, cmd interface{}) *MockUpdateTicketExecutor_Execute_Call {
 	return &MockUpdateTicketExecutor_Execute_Call{Call: _e.mock.On("Execute", ctx, cmd)}
 }
 
-type MockUpdateTicketExecutor_Execute_Call struct {
-	*mock.Call
+func (_c *MockUpdateTicketExecutor_Execute_Call) Run(run func(ctx context.Context, cmd command.UpdateTicketCommand)) *MockUpdateTicketExecutor_Execute_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(command.UpdateTicketCommand))
+	})
+	return _c
 }
 
 func (_c *MockUpdateTicketExecutor_Execute_Call) Return(_a0 entity.Ticket, _a1 error) *MockUpdateTicketExecutor_Execute_Call {
@@ -72,6 +83,7 @@ func (_c *MockUpdateTicketExecutor_Execute_Call) RunAndReturn(run func(context.C
 }
 
 // NewMockUpdateTicketExecutor creates a new instance of MockUpdateTicketExecutor. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
+// The first argument is typically a *testing.T value.
 func NewMockUpdateTicketExecutor(t interface {
 	mock.TestingT
 	Cleanup(func())

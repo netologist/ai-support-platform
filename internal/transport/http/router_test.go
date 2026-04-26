@@ -7,7 +7,9 @@ import (
 	"errors"
 	nethttp "net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -291,4 +293,166 @@ func TestNewRouter_CreateTicketDeniedByRouteAuthorizationGuard(t *testing.T) {
 
 	assert.Equal(t, nethttp.StatusForbidden, rr.Code)
 	assert.Contains(t, rr.Body.String(), "Forbidden")
+}
+
+func TestNewRouter_GetTicketDeniedByRouteAuthorizationGuard(t *testing.T) {
+	t.Parallel()
+
+	loginExecutor := mockcommand.NewMockLoginExecutor(t)
+	getExecutor := mockexecutor.NewMockGetTicketExecutor(t)
+	authorizer := mockservice.NewMockAuthorizer(t)
+
+	ticketID := uuid.MustParse("99999999-9999-9999-9999-999999999999")
+	viewerPrincipal := entity.Principal{
+		UserID:   uuid.MustParse("10101010-1010-1010-1010-101010101010"),
+		TenantID: uuid.MustParse("20202020-2020-2020-2020-202020202020"),
+		Role:     "viewer",
+	}
+
+	authorizer.EXPECT().Authorize(mock.Anything, viewerPrincipal, "tickets", "read").Return(service.ErrPermissionDenied)
+
+	router := NewRouter(Dependencies{
+		LoginExecutor:     loginExecutor,
+		GetTicketExecutor: getExecutor,
+		TokenVerifier: stubTokenVerifier{
+			verifyFn: func(token string) (entity.Principal, error) {
+				if token != "viewer-token" {
+					return entity.Principal{}, errors.New("invalid token")
+				}
+
+				return viewerPrincipal, nil
+			},
+		},
+		Authorizer: authorizer,
+	})
+
+	req := httptest.NewRequest(nethttp.MethodGet, "/v1/tickets/"+ticketID.String(), nil)
+	req.Header.Set("Authorization", "Bearer viewer-token")
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, nethttp.StatusForbidden, rr.Code)
+	assert.Contains(t, rr.Body.String(), "Forbidden")
+}
+
+func TestNewRouter_UpdateTicketDeniedByRouteAuthorizationGuard(t *testing.T) {
+	t.Parallel()
+
+	loginExecutor := mockcommand.NewMockLoginExecutor(t)
+	updateExecutor := mockexecutor.NewMockUpdateTicketExecutor(t)
+	authorizer := mockservice.NewMockAuthorizer(t)
+
+	ticketID := uuid.MustParse("30303030-3030-3030-3030-303030303030")
+	viewerPrincipal := entity.Principal{
+		UserID:   uuid.MustParse("40404040-4040-4040-4040-404040404040"),
+		TenantID: uuid.MustParse("50505050-5050-5050-5050-505050505050"),
+		Role:     "viewer",
+	}
+
+	authorizer.EXPECT().Authorize(mock.Anything, viewerPrincipal, "tickets", "update").Return(service.ErrPermissionDenied)
+
+	router := NewRouter(Dependencies{
+		LoginExecutor:        loginExecutor,
+		UpdateTicketExecutor: updateExecutor,
+		TokenVerifier: stubTokenVerifier{
+			verifyFn: func(token string) (entity.Principal, error) {
+				if token != "viewer-token" {
+					return entity.Principal{}, errors.New("invalid token")
+				}
+
+				return viewerPrincipal, nil
+			},
+		},
+		Authorizer: authorizer,
+	})
+
+	body := bytes.NewReader([]byte(`{"subject":"new"}`))
+	req := httptest.NewRequest(nethttp.MethodPatch, "/v1/tickets/"+ticketID.String(), body)
+	req.Header.Set("Authorization", "Bearer viewer-token")
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, nethttp.StatusForbidden, rr.Code)
+	assert.Contains(t, rr.Body.String(), "Forbidden")
+}
+
+func TestNewRouter_AuthorizationGuardErrorReturns500(t *testing.T) {
+	t.Parallel()
+
+	loginExecutor := mockcommand.NewMockLoginExecutor(t)
+	listExecutor := mockexecutor.NewMockListTicketsExecutor(t)
+	authorizer := mockservice.NewMockAuthorizer(t)
+
+	principal := entity.Principal{
+		UserID:   uuid.MustParse("60606060-6060-6060-6060-606060606060"),
+		TenantID: uuid.MustParse("70707070-7070-7070-7070-707070707070"),
+		Role:     "agent",
+	}
+
+	authorizer.EXPECT().Authorize(mock.Anything, principal, "tickets", "read").Return(errors.New("authz unavailable"))
+
+	router := NewRouter(Dependencies{
+		LoginExecutor:       loginExecutor,
+		ListTicketsExecutor: listExecutor,
+		TokenVerifier: stubTokenVerifier{verifyFn: func(_ string) (entity.Principal, error) {
+			return principal, nil
+		}},
+		Authorizer: authorizer,
+	})
+
+	req := httptest.NewRequest(nethttp.MethodGet, "/v1/tickets", nil)
+	req.Header.Set("Authorization", "Bearer token")
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, nethttp.StatusInternalServerError, rr.Code)
+	assert.Contains(t, rr.Body.String(), "Internal Server Error")
+}
+
+func TestNewRouter_RateLimitExceededReturns429(t *testing.T) {
+	t.Parallel()
+
+	loginExecutor := mockcommand.NewMockLoginExecutor(t)
+	listExecutor := mockexecutor.NewMockListTicketsExecutor(t)
+	rateLimiter := mockservice.NewMockRateLimiter(t)
+
+	principal := entity.Principal{
+		UserID:   uuid.MustParse("80808080-8080-8080-8080-808080808080"),
+		TenantID: uuid.MustParse("90909090-9090-9090-9090-909090909090"),
+		Role:     "agent",
+	}
+
+	rateLimiter.EXPECT().Allow(mock.Anything, mock.MatchedBy(func(key string) bool {
+		return strings.HasPrefix(key, "auth:")
+	}), int64(2), time.Minute).Return(service.RateLimitResult{
+		Allowed:    false,
+		Count:      3,
+		Limit:      2,
+		RetryAfter: 30 * time.Second,
+	}, nil)
+
+	router := NewRouter(Dependencies{
+		LoginExecutor:          loginExecutor,
+		ListTicketsExecutor:    listExecutor,
+		TokenVerifier:          stubTokenVerifier{verifyFn: func(_ string) (entity.Principal, error) { return principal, nil }},
+		RateLimiter:            rateLimiter,
+		PublicRateLimit:        1,
+		AuthenticatedRateLimit: 2,
+		RateLimitWindow:        time.Minute,
+	})
+
+	req := httptest.NewRequest(nethttp.MethodGet, "/v1/tickets", nil)
+	req.Header.Set("Authorization", "Bearer valid")
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, nethttp.StatusTooManyRequests, rr.Code)
+	assert.Contains(t, rr.Body.String(), "Too Many Requests")
+	assert.Equal(t, "2", rr.Header().Get("X-RateLimit-Limit"))
+	assert.Equal(t, "0", rr.Header().Get("X-RateLimit-Remaining"))
 }

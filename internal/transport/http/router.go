@@ -29,6 +29,8 @@ type Dependencies struct {
 	UpdateTicketExecutor   executor.UpdateTicketExecutor
 	ListTicketsExecutor    executor.ListTicketsExecutor
 	GetTicketExecutor      executor.GetTicketExecutor
+    ListDocumentsExecutor  executor.ListDocumentsExecutor
+    IngestDocumentExecutor executor.IngestDocumentExecutor
 	TokenVerifier          service.TokenVerifier
 	Authorizer             service.Authorizer
 	RateLimiter            service.RateLimiter
@@ -70,6 +72,8 @@ func NewRouter(dependencies Dependencies) http.Handler {
 			dependencies.UpdateTicketExecutor,
 			dependencies.ListTicketsExecutor,
 			dependencies.GetTicketExecutor,
+            dependencies.IngestDocumentExecutor,
+            dependencies.ListDocumentsExecutor,
 			dependencies.PublicRateLimit,
 			dependencies.AuthenticatedRateLimit,
 			dependencies.RateLimitWindow,

@@ -26,6 +26,8 @@ func New(
 	updateTicketExecutor executor.UpdateTicketExecutor,
 	listTicketsExecutor executor.ListTicketsExecutor,
 	getTicketExecutor executor.GetTicketExecutor,
+	ingestDocumentService executor.IngestDocumentExecutor,
+	listDocumentsService executor.ListDocumentsExecutor,
 	publicRateLimit int64,
 	authenticatedRateLimit int64,
 	rateLimitWindow time.Duration) *Handlers {
@@ -38,6 +40,8 @@ func New(
 		publicRateLimit:        publicRateLimit,
 		authenticatedRateLimit: authenticatedRateLimit,
 		rateLimitWindow:        rateLimitWindow,
+		ingestDocumentService:  ingestDocumentService,
+		listDocumentsExecutor:  listDocumentsService,
 	}
 }
 
@@ -47,6 +51,8 @@ type Handlers struct {
 	updateTicketExecutor   executor.UpdateTicketExecutor
 	getTicketExecutor      executor.GetTicketExecutor
 	listTicketsExecutor    executor.ListTicketsExecutor
+	ingestDocumentService  executor.IngestDocumentExecutor
+	listDocumentsExecutor  executor.ListDocumentsExecutor
 	publicRateLimit        int64
 	authenticatedRateLimit int64
 	rateLimitWindow        time.Duration
@@ -241,6 +247,68 @@ func (h *Handlers) ListTickets(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, responses)
 }
 
+func (h *Handlers) ListDocuments(w http.ResponseWriter, r *http.Request) {
+	principal, ok := principalFromContext(r.Context())
+	if !ok {
+		writeProblem(w, r, http.StatusUnauthorized, "Unauthorized", "missing authenticated principal", nil)
+		return
+	}
+
+	documents, err := h.listDocumentsExecutor.Execute(r.Context(), query.ListDocumentsQuery{Principal: principal})
+	if err != nil {
+		switch {
+		case errors.Is(err, apperrors.ErrForbidden):
+			writeProblem(w, r, http.StatusForbidden, "Forbidden", "you are not allowed to list documents", nil)
+		default:
+			writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "unexpected error", nil)
+		}
+		return
+	}
+
+	responses := make([]DocumentResponse, 0, len(documents))
+	for _, document := range documents {
+		responses = append(responses, toDocumentResponse(document))
+	}
+
+	writeJSON(w, http.StatusOK, responses)
+
+}
+
+func (h *Handlers) IngestDocument(w http.ResponseWriter, r *http.Request) {
+	principal, ok := principalFromContext(r.Context())
+	if !ok {
+		writeProblem(w, r, http.StatusUnauthorized, "Unauthorized", "missing authenticated principal", nil)
+		return
+	}
+
+	var body IngestDocumentRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(&body); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "Invalid request", fmt.Sprintf("decode request body: %v", err), nil)
+		return
+	}
+
+	document, err := h.ingestDocumentService.Execute(r.Context(), command.IngestDocumentCommand{
+		Principal: principal,
+		Title:     body.Title,
+		SourceURI: body.SourceUri,
+		Content:   body.Content,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, apperrors.ErrForbidden):
+			writeProblem(w, r, http.StatusForbidden, "Forbidden", "you are not allowed to ingest documents", nil)
+		default:
+			writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "unexpected error", nil)
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, toDocumentResponse(document))
+}
+
 func toTicketResponse(ticket entity.Ticket) TicketResponse {
 	return TicketResponse{
 		Id:               ticket.ID,
@@ -258,4 +326,15 @@ func toAssignedToUserID(id *uuid.UUID) *openapi_types.UUID {
 	}
 	u := openapi_types.UUID(*id)
 	return &u
+}
+
+func toDocumentResponse(document entity.KnowledgeDocument) DocumentResponse {
+	return DocumentResponse{
+		Id:              openapi_types.UUID(document.ID),
+		TenantId:        openapi_types.UUID(document.TenantID),
+		Title:           document.Title,
+		SourceUri:       document.SourceURI,
+		CreatedByUserId: openapi_types.UUID(document.CreatedByUserID),
+		CreatedAt:       document.CreatedAt,
+	}
 }

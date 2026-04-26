@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -37,7 +38,7 @@ func newLoginHandler(
 ) *handlers.Handlers {
 	t.Helper()
 	svc := command.NewLoginService(repo, verifier, issuer, auditLogger)
-	return handlers.New(svc, nil, nil, nil, nil, 100, 100, time.Minute)
+	return handlers.New(svc, nil, nil, nil, nil, nil, nil, 100, 100, time.Minute)
 }
 
 func newTicketHandler(
@@ -48,7 +49,7 @@ func newTicketHandler(
 	getExec *mockexec.MockGetTicketExecutor,
 ) *handlers.Handlers {
 	t.Helper()
-	return handlers.New(nil, createExec, updateExec, listExec, getExec, 100, 100, time.Minute)
+	return handlers.New(nil, createExec, updateExec, listExec, getExec, nil, nil, 100, 100, time.Minute)
 }
 
 func loginRequest(t *testing.T, body any) *http.Request {
@@ -373,6 +374,240 @@ func TestGetTicket(t *testing.T) {
 			assert.Contains(t, rr.Body.String(), tc.wantBody)
 		})
 	}
+}
+
+func TestCreateTicket(t *testing.T) {
+	fixedTenantID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	fixedUserID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+	fixedPrincipal := entity.Principal{UserID: fixedUserID, TenantID: fixedTenantID, Role: "agent"}
+	createdTicket := entity.Ticket{ID: uuid.New(), TenantID: fixedTenantID, Subject: "Need assistance", Status: "open", CreatedByUserID: fixedUserID}
+
+	tests := []struct {
+		name       string
+		principal  *entity.Principal
+		body       string
+		setupMocks func(exec *mockexec.MockCreateTicketExecutor)
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:      "success returns 201",
+			principal: &fixedPrincipal,
+			body:      `{"subject":"Need assistance"}`,
+			setupMocks: func(exec *mockexec.MockCreateTicketExecutor) {
+				exec.EXPECT().Execute(mock.Anything, command.CreateTicketCommand{Principal: fixedPrincipal, Subject: "Need assistance"}).Return(createdTicket, nil)
+			},
+			wantStatus: http.StatusCreated,
+			wantBody:   "Need assistance",
+		},
+		{
+			name:      "missing principal returns 401",
+			principal: nil,
+			body:      `{"subject":"Need assistance"}`,
+			setupMocks: func(_ *mockexec.MockCreateTicketExecutor) {
+			},
+			wantStatus: http.StatusUnauthorized,
+			wantBody:   "Unauthorized",
+		},
+		{
+			name:      "bad json returns 400",
+			principal: &fixedPrincipal,
+			body:      `{bad-json}`,
+			setupMocks: func(_ *mockexec.MockCreateTicketExecutor) {
+			},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "Invalid request",
+		},
+		{
+			name:      "forbidden returns 403",
+			principal: &fixedPrincipal,
+			body:      `{"subject":"Need assistance"}`,
+			setupMocks: func(exec *mockexec.MockCreateTicketExecutor) {
+				exec.EXPECT().Execute(mock.Anything, command.CreateTicketCommand{Principal: fixedPrincipal, Subject: "Need assistance"}).Return(entity.Ticket{}, apperrors.ErrForbidden)
+			},
+			wantStatus: http.StatusForbidden,
+			wantBody:   "Forbidden",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			createExec := mockexec.NewMockCreateTicketExecutor(t)
+			tc.setupMocks(createExec)
+
+			h := newTicketHandler(t, createExec, nil, nil, nil)
+			req := httptest.NewRequest(http.MethodPost, "/v1/tickets", bytes.NewBufferString(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			if tc.principal != nil {
+				req = requestWithPrincipal(req, *tc.principal)
+			}
+
+			rr := httptest.NewRecorder()
+			h.CreateTicket(rr, req)
+
+			assert.Equal(t, tc.wantStatus, rr.Code)
+			assert.Contains(t, rr.Body.String(), tc.wantBody)
+		})
+	}
+}
+
+func TestUpdateTicket(t *testing.T) {
+	fixedTenantID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	fixedUserID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+	fixedTicketID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	fixedPrincipal := entity.Principal{UserID: fixedUserID, TenantID: fixedTenantID, Role: "agent"}
+	updatedTicket := entity.Ticket{ID: fixedTicketID, TenantID: fixedTenantID, Subject: "Updated", Status: "closed", CreatedByUserID: fixedUserID}
+
+	tests := []struct {
+		name       string
+		principal  *entity.Principal
+		pathParam  string
+		body       string
+		setupMocks func(exec *mockexec.MockUpdateTicketExecutor)
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:      "success returns 200",
+			principal: &fixedPrincipal,
+			pathParam: fixedTicketID.String(),
+			body:      `{"subject":" Updated ","status":"CLOSED"}`,
+			setupMocks: func(exec *mockexec.MockUpdateTicketExecutor) {
+				trimmed := "Updated"
+				status := "closed"
+				exec.EXPECT().Execute(mock.Anything, command.UpdateTicketCommand{
+					TicketID:  fixedTicketID,
+					Principal: fixedPrincipal,
+					Subject:   &trimmed,
+					Status:    &status,
+				}).Return(updatedTicket, nil)
+			},
+			wantStatus: http.StatusOK,
+			wantBody:   "Updated",
+		},
+		{
+			name:      "missing principal returns 401",
+			principal: nil,
+			pathParam: fixedTicketID.String(),
+			body:      `{"subject":"Updated"}`,
+			setupMocks: func(_ *mockexec.MockUpdateTicketExecutor) {
+			},
+			wantStatus: http.StatusUnauthorized,
+			wantBody:   "Unauthorized",
+		},
+		{
+			name:      "invalid ticket id returns 400",
+			principal: &fixedPrincipal,
+			pathParam: "not-a-uuid",
+			body:      `{"subject":"Updated"}`,
+			setupMocks: func(_ *mockexec.MockUpdateTicketExecutor) {
+			},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "Validation failed",
+		},
+		{
+			name:      "not found returns 404",
+			principal: &fixedPrincipal,
+			pathParam: fixedTicketID.String(),
+			body:      `{"subject":"Updated"}`,
+			setupMocks: func(exec *mockexec.MockUpdateTicketExecutor) {
+				subject := "Updated"
+				exec.EXPECT().Execute(mock.Anything, command.UpdateTicketCommand{
+					TicketID:  fixedTicketID,
+					Principal: fixedPrincipal,
+					Subject:   &subject,
+					Status:    nil,
+				}).Return(entity.Ticket{}, apperrors.ErrNotFound)
+			},
+			wantStatus: http.StatusNotFound,
+			wantBody:   "Not Found",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			updateExec := mockexec.NewMockUpdateTicketExecutor(t)
+			tc.setupMocks(updateExec)
+
+			h := newTicketHandler(t, nil, updateExec, nil, nil)
+			req := httptest.NewRequest(http.MethodPatch, "/v1/tickets/"+tc.pathParam, bytes.NewBufferString(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			req = injectChiTicketID(req, tc.pathParam)
+			if tc.principal != nil {
+				req = requestWithPrincipal(req, *tc.principal)
+			}
+
+			rr := httptest.NewRecorder()
+			h.UpdateTicket(rr, req, openapi_types.UUID(fixedTicketID))
+
+			assert.Equal(t, tc.wantStatus, rr.Code)
+			assert.Contains(t, rr.Body.String(), tc.wantBody)
+		})
+	}
+}
+
+func TestDocumentHandlers(t *testing.T) {
+	fixedTenantID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	fixedUserID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+	fixedPrincipal := entity.Principal{UserID: fixedUserID, TenantID: fixedTenantID, Role: "agent"}
+	createdAt := time.Now().UTC()
+
+	listExec := mockexec.NewMockListDocumentsExecutor(t)
+	ingestExec := mockexec.NewMockIngestDocumentExecutor(t)
+
+	doc := entity.KnowledgeDocument{
+		ID:              uuid.New(),
+		TenantID:        fixedTenantID,
+		Title:           "Runbook",
+		SourceURI:       "https://example.com/runbook",
+		CreatedByUserID: fixedUserID,
+		CreatedAt:       createdAt,
+	}
+
+	h := handlers.New(nil, nil, nil, nil, nil, ingestExec, listExec, 100, 100, time.Minute)
+
+	t.Run("list documents missing principal returns 401", func(t *testing.T) {
+		req := ticketRequest(t, http.MethodGet, "/v1/documents", nil)
+		rr := httptest.NewRecorder()
+		h.ListDocuments(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	})
+
+	t.Run("list documents success", func(t *testing.T) {
+		listExec.EXPECT().Execute(mock.Anything, query.ListDocumentsQuery{Principal: fixedPrincipal}).Return([]entity.KnowledgeDocument{doc}, nil).Once()
+		req := requestWithPrincipal(ticketRequest(t, http.MethodGet, "/v1/documents", nil), fixedPrincipal)
+		rr := httptest.NewRecorder()
+		h.ListDocuments(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Runbook")
+	})
+
+	t.Run("ingest document success", func(t *testing.T) {
+		ingestExec.EXPECT().Execute(mock.Anything, command.IngestDocumentCommand{
+			Principal: fixedPrincipal,
+			Title:     "Runbook",
+			SourceURI: "https://example.com/runbook",
+			Content:   "hello",
+		}).Return(doc, nil).Once()
+
+		req := requestWithPrincipal(ticketRequest(t, http.MethodPost, "/v1/documents", map[string]string{
+			"title":      "Runbook",
+			"source_uri": "https://example.com/runbook",
+			"content":    "hello",
+		}), fixedPrincipal)
+		rr := httptest.NewRecorder()
+		h.IngestDocument(rr, req)
+		assert.Equal(t, http.StatusCreated, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Runbook")
+	})
+
+	t.Run("ingest document malformed body returns 400", func(t *testing.T) {
+		req := requestWithPrincipal(httptest.NewRequest(http.MethodPost, "/v1/documents", bytes.NewBufferString(`{bad-json}`)), fixedPrincipal)
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+		h.IngestDocument(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
 }
 
 // injectChiTicketID injects the ticketID URL param into the request context so that
