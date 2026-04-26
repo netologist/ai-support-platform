@@ -17,9 +17,37 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/runtime"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+const (
+	BearerAuthScopes = "bearerAuth.Scopes"
+)
+
+// Defines values for UpdateTicketRequestStatus.
+const (
+	Closed UpdateTicketRequestStatus = "closed"
+	Open   UpdateTicketRequestStatus = "open"
+)
+
+// Valid indicates whether the value is a known member of the UpdateTicketRequestStatus enum.
+func (e UpdateTicketRequestStatus) Valid() bool {
+	switch e {
+	case Closed:
+		return true
+	case Open:
+		return true
+	default:
+		return false
+	}
+}
+
+// CreateTicketRequest defines model for CreateTicketRequest.
+type CreateTicketRequest struct {
+	Subject string `json:"subject"`
+}
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
@@ -47,8 +75,33 @@ type Problem struct {
 	Type      string               `json:"type"`
 }
 
+// TicketResponse defines model for TicketResponse.
+type TicketResponse struct {
+	AssignedToUserId *openapi_types.UUID `json:"assigned_to_user_id,omitempty"`
+	CreatedByUserId  openapi_types.UUID  `json:"created_by_user_id"`
+	Id               openapi_types.UUID  `json:"id"`
+	Status           string              `json:"status"`
+	Subject          string              `json:"subject"`
+	TenantId         openapi_types.UUID  `json:"tenant_id"`
+}
+
+// UpdateTicketRequest defines model for UpdateTicketRequest.
+type UpdateTicketRequest struct {
+	Status  *UpdateTicketRequestStatus `json:"status,omitempty"`
+	Subject *string                    `json:"subject,omitempty"`
+}
+
+// UpdateTicketRequestStatus defines model for UpdateTicketRequest.Status.
+type UpdateTicketRequestStatus string
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
+
+// CreateTicketJSONRequestBody defines body for CreateTicket for application/json ContentType.
+type CreateTicketJSONRequestBody = CreateTicketRequest
+
+// UpdateTicketJSONRequestBody defines body for UpdateTicket for application/json ContentType.
+type UpdateTicketJSONRequestBody = UpdateTicketRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -58,6 +111,18 @@ type ServerInterface interface {
 	// Login and issue a JWT access token
 	// (POST /v1/auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
+	// List tickets for the authenticated tenant
+	// (GET /v1/tickets)
+	ListTickets(w http.ResponseWriter, r *http.Request)
+	// Create a new ticket
+	// (POST /v1/tickets)
+	CreateTicket(w http.ResponseWriter, r *http.Request)
+	// Fetch a ticket by ID
+	// (GET /v1/tickets/{ticketID})
+	GetTicket(w http.ResponseWriter, r *http.Request, ticketID openapi_types.UUID)
+	// Update an existing ticket
+	// (PATCH /v1/tickets/{ticketID})
+	UpdateTicket(w http.ResponseWriter, r *http.Request, ticketID openapi_types.UUID)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -73,6 +138,30 @@ func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
 // Login and issue a JWT access token
 // (POST /v1/auth/login)
 func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List tickets for the authenticated tenant
+// (GET /v1/tickets)
+func (_ Unimplemented) ListTickets(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a new ticket
+// (POST /v1/tickets)
+func (_ Unimplemented) CreateTicket(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Fetch a ticket by ID
+// (GET /v1/tickets/{ticketID})
+func (_ Unimplemented) GetTicket(w http.ResponseWriter, r *http.Request, ticketID openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update an existing ticket
+// (PATCH /v1/tickets/{ticketID})
+func (_ Unimplemented) UpdateTicket(w http.ResponseWriter, r *http.Request, ticketID openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -104,6 +193,108 @@ func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Login(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTickets operation middleware
+func (siw *ServerInterfaceWrapper) ListTickets(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTickets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTicket operation middleware
+func (siw *ServerInterfaceWrapper) CreateTicket(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTicket(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTicket operation middleware
+func (siw *ServerInterfaceWrapper) GetTicket(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "ticketID" -------------
+	var ticketID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ticketID", chi.URLParam(r, "ticketID"), &ticketID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ticketID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTicket(w, r, ticketID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateTicket operation middleware
+func (siw *ServerInterfaceWrapper) UpdateTicket(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "ticketID" -------------
+	var ticketID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ticketID", chi.URLParam(r, "ticketID"), &ticketID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ticketID", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateTicket(w, r, ticketID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -232,6 +423,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/auth/login", wrapper.Login)
 	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/tickets", wrapper.ListTickets)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/tickets", wrapper.CreateTicket)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/tickets/{ticketID}", wrapper.GetTicket)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/v1/tickets/{ticketID}", wrapper.UpdateTicket)
+	})
 
 	return r
 }
@@ -289,6 +492,191 @@ func (response Login401JSONResponse) VisitLoginResponse(w http.ResponseWriter) e
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListTicketsRequestObject struct {
+}
+
+type ListTicketsResponseObject interface {
+	VisitListTicketsResponse(w http.ResponseWriter) error
+}
+
+type ListTickets200JSONResponse []TicketResponse
+
+func (response ListTickets200JSONResponse) VisitListTicketsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTickets401JSONResponse Problem
+
+func (response ListTickets401JSONResponse) VisitListTicketsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTickets403JSONResponse Problem
+
+func (response ListTickets403JSONResponse) VisitListTicketsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateTicketRequestObject struct {
+	Body *CreateTicketJSONRequestBody
+}
+
+type CreateTicketResponseObject interface {
+	VisitCreateTicketResponse(w http.ResponseWriter) error
+}
+
+type CreateTicket201JSONResponse TicketResponse
+
+func (response CreateTicket201JSONResponse) VisitCreateTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateTicket400JSONResponse Problem
+
+func (response CreateTicket400JSONResponse) VisitCreateTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateTicket401JSONResponse Problem
+
+func (response CreateTicket401JSONResponse) VisitCreateTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateTicket403JSONResponse Problem
+
+func (response CreateTicket403JSONResponse) VisitCreateTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetTicketRequestObject struct {
+	TicketID openapi_types.UUID `json:"ticketID"`
+}
+
+type GetTicketResponseObject interface {
+	VisitGetTicketResponse(w http.ResponseWriter) error
+}
+
+type GetTicket200JSONResponse TicketResponse
+
+func (response GetTicket200JSONResponse) VisitGetTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetTicket400JSONResponse Problem
+
+func (response GetTicket400JSONResponse) VisitGetTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetTicket401JSONResponse Problem
+
+func (response GetTicket401JSONResponse) VisitGetTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetTicket403JSONResponse Problem
+
+func (response GetTicket403JSONResponse) VisitGetTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetTicket404JSONResponse Problem
+
+func (response GetTicket404JSONResponse) VisitGetTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateTicketRequestObject struct {
+	TicketID openapi_types.UUID `json:"ticketID"`
+	Body     *UpdateTicketJSONRequestBody
+}
+
+type UpdateTicketResponseObject interface {
+	VisitUpdateTicketResponse(w http.ResponseWriter) error
+}
+
+type UpdateTicket200JSONResponse TicketResponse
+
+func (response UpdateTicket200JSONResponse) VisitUpdateTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateTicket400JSONResponse Problem
+
+func (response UpdateTicket400JSONResponse) VisitUpdateTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateTicket401JSONResponse Problem
+
+func (response UpdateTicket401JSONResponse) VisitUpdateTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateTicket403JSONResponse Problem
+
+func (response UpdateTicket403JSONResponse) VisitUpdateTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateTicket404JSONResponse Problem
+
+func (response UpdateTicket404JSONResponse) VisitUpdateTicketResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Health check
@@ -297,6 +685,18 @@ type StrictServerInterface interface {
 	// Login and issue a JWT access token
 	// (POST /v1/auth/login)
 	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
+	// List tickets for the authenticated tenant
+	// (GET /v1/tickets)
+	ListTickets(ctx context.Context, request ListTicketsRequestObject) (ListTicketsResponseObject, error)
+	// Create a new ticket
+	// (POST /v1/tickets)
+	CreateTicket(ctx context.Context, request CreateTicketRequestObject) (CreateTicketResponseObject, error)
+	// Fetch a ticket by ID
+	// (GET /v1/tickets/{ticketID})
+	GetTicket(ctx context.Context, request GetTicketRequestObject) (GetTicketResponseObject, error)
+	// Update an existing ticket
+	// (PATCH /v1/tickets/{ticketID})
+	UpdateTicket(ctx context.Context, request UpdateTicketRequestObject) (UpdateTicketResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -383,20 +783,141 @@ func (sh *strictHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ListTickets operation middleware
+func (sh *strictHandler) ListTickets(w http.ResponseWriter, r *http.Request) {
+	var request ListTicketsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTickets(ctx, request.(ListTicketsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTickets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTicketsResponseObject); ok {
+		if err := validResponse.VisitListTicketsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateTicket operation middleware
+func (sh *strictHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {
+	var request CreateTicketRequestObject
+
+	var body CreateTicketJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateTicket(ctx, request.(CreateTicketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateTicket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateTicketResponseObject); ok {
+		if err := validResponse.VisitCreateTicketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTicket operation middleware
+func (sh *strictHandler) GetTicket(w http.ResponseWriter, r *http.Request, ticketID openapi_types.UUID) {
+	var request GetTicketRequestObject
+
+	request.TicketID = ticketID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTicket(ctx, request.(GetTicketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTicket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTicketResponseObject); ok {
+		if err := validResponse.VisitGetTicketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateTicket operation middleware
+func (sh *strictHandler) UpdateTicket(w http.ResponseWriter, r *http.Request, ticketID openapi_types.UUID) {
+	var request UpdateTicketRequestObject
+
+	request.TicketID = ticketID
+
+	var body UpdateTicketJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateTicket(ctx, request.(UpdateTicketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateTicket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateTicketResponseObject); ok {
+		if err := validResponse.VisitUpdateTicketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"OwAA///IV7crPBYAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

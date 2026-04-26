@@ -8,8 +8,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/netologist/ai-support-platform/internal/app/command"
+	"github.com/netologist/ai-support-platform/internal/app/query"
 	infraaudit "github.com/netologist/ai-support-platform/internal/infra/audit"
 	infraauth "github.com/netologist/ai-support-platform/internal/infra/auth"
+	infracache "github.com/netologist/ai-support-platform/internal/infra/cache"
 
 	messagingkafka "github.com/netologist/ai-support-platform/internal/infra/messaging/kafka"
 	postgresrepo "github.com/netologist/ai-support-platform/internal/infra/repository/postgres"
@@ -65,7 +67,8 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 	// -------------------------
 	queries := sqlc.New(db)
 	authRepository := postgresrepo.NewAuthRepository(queries)
-    auditRepository := postgresrepo.NewAuditRepository(queries)
+	auditRepository := postgresrepo.NewAuditRepository(queries)
+	ticketRepository := postgresrepo.NewTicketRepository(queries)
 
 	// -------------------------
 	// Auth
@@ -76,6 +79,13 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 	// Services
 	// -------------------------
 	auditLogger := infraaudit.NewLogger(auditRepository, kafkaPublisher, config.KafkaAuditTopic)
+	authorizer, err := infraauth.NewAuthorizer()
+	if err != nil {
+		closer.Close()
+		return APIRuntime{}, fmt.Errorf("build authorizer: %w", err)
+	}
+
+	ticketCache := infracache.NewRedisTicketCache(redisClient, config.TicketCacheTTL)
 
 	loginService := command.NewLoginService(
 		authRepository,
@@ -84,12 +94,47 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 		auditLogger,
 	)
 
+	createTicketService := command.NewCreateTicketService(
+		ticketRepository,
+		authorizer,
+		ticketCache,
+		auditLogger,
+		kafkaPublisher,
+		config.KafkaTicketTopic,
+	)
+
+	updateTicketService := command.NewUpdateTicketService(
+		ticketRepository,
+		authorizer,
+		ticketCache,
+		auditLogger,
+		kafkaPublisher,
+		config.KafkaTicketTopic,
+	)
+
+    getTicketService := query.NewGetTicketService(
+        ticketRepository,
+        authorizer,
+        ticketCache,
+        auditLogger,
+    )
+
+    listTicketService := query.NewListTicketsService(
+        ticketRepository,
+        authorizer,
+        auditLogger,
+    )
+
 	// -------------------------
 	// HTTP
 	// -------------------------
 	router := transporthttp.NewRouter(transporthttp.Dependencies{
-		LoginExecutor: loginService,
-		TokenVerifier: tokenManager,
+		LoginExecutor:        loginService,
+		CreateTicketExecutor: createTicketService,
+		UpdateTicketExecutor: updateTicketService,
+        GetTicketExecutor:    getTicketService,
+        ListTicketsExecutor:  listTicketService,
+		TokenVerifier:        tokenManager,
 	})
 
 	// -------------------------

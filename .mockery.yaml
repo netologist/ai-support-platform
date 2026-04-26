@@ -10,6 +10,20 @@ packages:
       LoginExecutor:
         config:
           dir: internal/mocks/command
+  github.com/netologist/ai-support-platform/internal/app/executor:
+    interfaces:
+      CreateTicketExecutor:
+        config:
+          dir: internal/mocks/executor
+      UpdateTicketExecutor:
+        config:
+          dir: internal/mocks/executor
+      GetTicketExecutor:
+        config:
+          dir: internal/mocks/executor
+      ListTicketsExecutor:
+        config:
+          dir: internal/mocks/executor
   github.com/netologist/ai-support-platform/internal/domain/repository:
     interfaces:
       AuthRepository:

@@ -11,10 +11,6 @@ import (
 	"github.com/netologist/ai-support-platform/internal/domain/service"
 )
 
-type LoginExecutor interface {
-	Execute(ctx context.Context, cmd LoginCommand) (LoginResult, error)
-}
-
 type LoginCommand struct {
 	Email    string
 	Password string

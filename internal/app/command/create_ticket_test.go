@@ -143,5 +143,3 @@ func TestCreateTicketService_Execute(t *testing.T) {
 		})
 	}
 }
-
-

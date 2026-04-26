@@ -11,14 +11,18 @@ import (
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 
-	"github.com/netologist/ai-support-platform/internal/app/command"
+	"github.com/netologist/ai-support-platform/internal/app/executor"
 	"github.com/netologist/ai-support-platform/internal/domain/service"
 	"github.com/netologist/ai-support-platform/internal/transport/http/handlers"
 )
 
 type Dependencies struct {
-	LoginExecutor command.LoginExecutor
-	TokenVerifier service.TokenVerifier
+	LoginExecutor        executor.LoginExecutor
+	CreateTicketExecutor executor.CreateTicketExecutor
+	UpdateTicketExecutor executor.UpdateTicketExecutor
+	ListTicketsExecutor  executor.ListTicketsExecutor
+	GetTicketExecutor    executor.GetTicketExecutor
+	TokenVerifier        service.TokenVerifier
 }
 
 func NewRouter(dependencies Dependencies) http.Handler {
@@ -46,6 +50,10 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		r.Use(nethttpmiddleware.OapiRequestValidator(swagger))
 		handlers.HandlerFromMux(handlers.New(
 			dependencies.LoginExecutor,
+			dependencies.CreateTicketExecutor,
+			dependencies.UpdateTicketExecutor,
+            dependencies.ListTicketsExecutor,
+            dependencies.GetTicketExecutor,
 			100,               // publicRateLimit
 			1000,              // authenticatedRateLimit
 			15*60*time.Second, // rateLimitWindow

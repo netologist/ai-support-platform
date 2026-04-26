@@ -34,6 +34,16 @@ type Tenant struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type Ticket struct {
+	ID               pgtype.UUID
+	TenantID         pgtype.UUID
+	AssignedToUserID pgtype.UUID
+	Subject          string
+	Status           string
+	CreatedByUserID  pgtype.UUID
+	CreatedAt        pgtype.Timestamptz
+}
+
 type User struct {
 	ID           pgtype.UUID
 	Email        string
