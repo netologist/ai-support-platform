@@ -15,12 +15,24 @@ packages:
       AuthRepository:
         config:
           dir: internal/mocks/repository
+      TicketRepository:
+        config:
+          dir: internal/mocks/repository
   github.com/netologist/ai-support-platform/internal/domain/service:
     interfaces:
       AuditLogger:
         config:
           dir: internal/mocks/service
+      Authorizer:
+        config:
+          dir: internal/mocks/service
+      MessagePublisher:
+        config:
+          dir: internal/mocks/service
       PasswordVerifier:
+        config:
+          dir: internal/mocks/service
+      TicketCache:
         config:
           dir: internal/mocks/service
       TokenIssuer:
