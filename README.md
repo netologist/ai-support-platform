@@ -307,17 +307,17 @@ The following diagram is a C4-style component view of the main containers and co
 ```mermaid
 flowchart LR
 	subgraph ClientZone[Clients]
-		Client[Support Agent / Admin UI]
+		Client[Support Agent and Admin UI]
 	end
 
-	subgraph APIContainer[Container: API Service (cmd/api)]
+	subgraph APIContainer[Container API Service cmd_api]
 		HTTP[Transport: HTTP Router]
 		GQL[Transport: GraphQL Handler]
 		AppSvc[Application Services\nCommands/Queries]
 		Auth[Auth Component\nJWT + Casbin]
 	end
 
-	subgraph WorkerContainer[Container: Worker Service (cmd/worker)]
+	subgraph WorkerContainer[Container Worker Service cmd_worker]
 		Relay[Outbox Relay]
 		Consumers[Kafka Consumers]
 		Idem[Idempotency Store]
