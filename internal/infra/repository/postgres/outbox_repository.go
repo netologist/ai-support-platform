@@ -55,6 +55,7 @@ func (r *OutboxRepository) GetUnsentEvents(ctx context.Context, limit int) ([]*e
 			EventType:     row.EventType,
 			Payload:       row.Payload,
 			CreatedAt:     t,
+			AttemptCount:  int(row.AttemptCount),
 		})
 	}
 
@@ -63,4 +64,8 @@ func (r *OutboxRepository) GetUnsentEvents(ctx context.Context, limit int) ([]*e
 
 func (r *OutboxRepository) MarkEventSent(ctx context.Context, id uuid.UUID) error {
 	return r.queries.MarkOutboxEventSent(ctx, toPGUUID(id))
+}
+
+func (r *OutboxRepository) IncrementAttemptCount(ctx context.Context, id uuid.UUID) error {
+	return r.queries.IncrementOutboxEventAttempt(ctx, toPGUUID(id))
 }

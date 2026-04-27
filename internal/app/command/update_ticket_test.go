@@ -243,7 +243,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 			wantErr: apperrors.ErrNotFound,
 		},
 		{
-			name: "outbox failure is logged but updated ticket is still returned",
+			name: "outbox failure returns error (update is preserved in DB)",
 			cmd: command.UpdateTicketCommand{
 				TicketID:  fixedTicketID,
 				Principal: principal,
@@ -259,12 +259,8 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 					Status:   entity.TicketStatusOpen,
 				}, nil)
 				outbox.EXPECT().InsertEvent(mock.Anything, mock.Anything).Return(errors.New("outbox db error"))
-				cache.EXPECT().SetTicket(mock.Anything, mock.Anything).Return(nil)
-				auditor.EXPECT().Record(mock.Anything, mock.Anything).Return(nil)
 			},
-			check: func(t *testing.T, ticket entity.Ticket) {
-				assert.Equal(t, "New subject", ticket.Subject)
-			},
+			wantErr: errors.New("outbox db error"),
 		},
 	}
 

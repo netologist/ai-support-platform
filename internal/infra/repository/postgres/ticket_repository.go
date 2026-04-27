@@ -93,6 +93,10 @@ func (repository TicketRepository) Update(ctx context.Context, ticket entity.Tic
 	return mapTicket(row.ID, row.TenantID, row.Subject, row.Status, row.CreatedByUserID, row.AssignedToUserID, row.CreatedAt)
 }
 
+func (repository TicketRepository) Delete(ctx context.Context, ticketID uuid.UUID) error {
+	return repository.queries.DeleteTicket(ctx, toPGUUID(ticketID))
+}
+
 func mapTicket(id pgtype.UUID, tenantID pgtype.UUID, subject string, status string, createdByUserID pgtype.UUID, assignedToUserID pgtype.UUID, createdAt pgtype.Timestamptz) (entity.Ticket, error) {
 	domainTicketID, err := toDomainUUID(id)
 	if err != nil {

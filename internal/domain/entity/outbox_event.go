@@ -16,6 +16,9 @@ type OutboxEvent struct {
 	Payload       []byte // JSON
 	CreatedAt     time.Time
 	SentAt        *time.Time
+	// AttemptCount is persisted in the DB; relay uses it to enforce MaxRetries
+	// without relying on in-process memory that resets on restart.
+	AttemptCount  int
 }
 
 // NewOutboxEvent creates an OutboxEvent and validates that payload is well-formed JSON.

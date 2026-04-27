@@ -1,3 +1,6 @@
+-- name: DeleteTicket :exec
+DELETE FROM tickets WHERE id = $1;
+
 -- name: GetTicketByID :one
 SELECT id, tenant_id, subject, status, created_by_user_id, assigned_to_user_id, created_at
 FROM tickets

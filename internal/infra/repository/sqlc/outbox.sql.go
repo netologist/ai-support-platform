@@ -12,7 +12,7 @@ import (
 )
 
 const getUnsentOutboxEvents = `-- name: GetUnsentOutboxEvents :many
-SELECT id, aggregate_type, aggregate_id, event_type, payload, created_at
+SELECT id, aggregate_type, aggregate_id, event_type, payload, created_at, attempt_count
 FROM outbox
 WHERE sent_at IS NULL
 ORDER BY created_at ASC
@@ -26,6 +26,7 @@ type GetUnsentOutboxEventsRow struct {
 	EventType     string
 	Payload       []byte
 	CreatedAt     pgtype.Timestamptz
+	AttemptCount  int32
 }
 
 func (q *Queries) GetUnsentOutboxEvents(ctx context.Context, limit int32) ([]GetUnsentOutboxEventsRow, error) {
@@ -44,6 +45,7 @@ func (q *Queries) GetUnsentOutboxEvents(ctx context.Context, limit int32) ([]Get
 			&i.EventType,
 			&i.Payload,
 			&i.CreatedAt,
+			&i.AttemptCount,
 		); err != nil {
 			return nil, err
 		}
@@ -53,6 +55,15 @@ func (q *Queries) GetUnsentOutboxEvents(ctx context.Context, limit int32) ([]Get
 		return nil, err
 	}
 	return items, nil
+}
+
+const incrementOutboxEventAttempt = `-- name: IncrementOutboxEventAttempt :exec
+UPDATE outbox SET attempt_count = attempt_count + 1 WHERE id = $1
+`
+
+func (q *Queries) IncrementOutboxEventAttempt(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, incrementOutboxEventAttempt, id)
+	return err
 }
 
 const insertOutboxEvent = `-- name: InsertOutboxEvent :exec

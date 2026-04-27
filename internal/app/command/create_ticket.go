@@ -67,22 +67,39 @@ func (svc CreateTicketService) Execute(ctx context.Context, command CreateTicket
 		return entity.Ticket{}, err
 	}
 
-	// Write outbox event for ticket.created
+	// Write outbox event for ticket.created. If this fails, compensate by
+	// deleting the ticket so the system stays consistent — a ticket without
+	// an outbox event would never be published to downstream consumers.
 	if svc.outbox != nil {
 		event, err := entity.NewOutboxEvent("ticket", createdTicket.ID, "ticket.created", map[string]any{
 			"event_type": "ticket.created",
 			"ticket":     createdTicket,
 		})
 		if err != nil {
-			slog.Error("outbox event build failed after ticket create",
+			slog.Error("outbox event build failed after ticket create — compensating delete",
 				slog.String("ticket_id", createdTicket.ID.String()),
 				slog.Any("error", err),
 			)
-		} else if err := svc.outbox.InsertEvent(ctx, event); err != nil {
-			slog.Error("outbox insert failed after ticket create",
+			if delErr := svc.ticketRepository.Delete(ctx, createdTicket.ID); delErr != nil {
+				slog.Error("compensating delete failed after ticket create",
+					slog.String("ticket_id", createdTicket.ID.String()),
+					slog.Any("error", delErr),
+				)
+			}
+			return entity.Ticket{}, err
+		}
+		if err := svc.outbox.InsertEvent(ctx, event); err != nil {
+			slog.Error("outbox insert failed after ticket create — compensating delete",
 				slog.String("ticket_id", createdTicket.ID.String()),
 				slog.Any("error", err),
 			)
+			if delErr := svc.ticketRepository.Delete(ctx, createdTicket.ID); delErr != nil {
+				slog.Error("compensating delete failed after ticket create",
+					slog.String("ticket_id", createdTicket.ID.String()),
+					slog.Any("error", delErr),
+				)
+			}
+			return entity.Ticket{}, err
 		}
 	}
 

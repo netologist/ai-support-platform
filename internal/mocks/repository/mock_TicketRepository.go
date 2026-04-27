@@ -254,6 +254,53 @@ func (_c *MockTicketRepository_Update_Call) RunAndReturn(run func(context.Contex
 	return _c
 }
 
+// Delete provides a mock function with given fields: ctx, ticketID
+func (_m *MockTicketRepository) Delete(ctx context.Context, ticketID uuid.UUID) error {
+	ret := _m.Called(ctx, ticketID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Delete")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) error); ok {
+		r0 = rf(ctx, ticketID)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockTicketRepository_Delete_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Delete'
+type MockTicketRepository_Delete_Call struct {
+	*mock.Call
+}
+
+// Delete is a helper method to define mock.On call
+//   - ctx context.Context
+//   - ticketID uuid.UUID
+func (_e *MockTicketRepository_Expecter) Delete(ctx interface{}, ticketID interface{}) *MockTicketRepository_Delete_Call {
+	return &MockTicketRepository_Delete_Call{Call: _e.mock.On("Delete", ctx, ticketID)}
+}
+
+func (_c *MockTicketRepository_Delete_Call) Run(run func(ctx context.Context, ticketID uuid.UUID)) *MockTicketRepository_Delete_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(uuid.UUID))
+	})
+	return _c
+}
+
+func (_c *MockTicketRepository_Delete_Call) Return(_a0 error) *MockTicketRepository_Delete_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockTicketRepository_Delete_Call) RunAndReturn(run func(context.Context, uuid.UUID) error) *MockTicketRepository_Delete_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockTicketRepository creates a new instance of MockTicketRepository. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockTicketRepository(t interface {

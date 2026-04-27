@@ -96,7 +96,10 @@ func (svc UpdateTicketService) Execute(ctx context.Context, command UpdateTicket
 		return entity.Ticket{}, err
 	}
 
-	// Write outbox event for ticket.updated
+	// Write outbox event for ticket.updated. If this fails, return an error so
+	// the caller knows the update is incomplete. We do NOT undo the DB update
+	// because losing the updated data would be worse than a missing event
+	// (the outbox relay can be replayed once the event is re-queued manually).
 	if svc.outbox != nil {
 		event, err := entity.NewOutboxEvent("ticket", updatedTicket.ID, "ticket.updated", map[string]any{
 			"event_type": "ticket.updated",
@@ -107,11 +110,14 @@ func (svc UpdateTicketService) Execute(ctx context.Context, command UpdateTicket
 				slog.String("ticket_id", updatedTicket.ID.String()),
 				slog.Any("error", err),
 			)
-		} else if err := svc.outbox.InsertEvent(ctx, event); err != nil {
+			return entity.Ticket{}, err
+		}
+		if err := svc.outbox.InsertEvent(ctx, event); err != nil {
 			slog.Error("outbox insert failed after ticket update",
 				slog.String("ticket_id", updatedTicket.ID.String()),
 				slog.Any("error", err),
 			)
+			return entity.Ticket{}, err
 		}
 	}
 

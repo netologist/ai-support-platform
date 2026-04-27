@@ -57,6 +57,7 @@ type Outbox struct {
 	Payload       []byte
 	CreatedAt     pgtype.Timestamptz
 	SentAt        pgtype.Timestamptz
+	AttemptCount  int32
 }
 
 type Tenant struct {

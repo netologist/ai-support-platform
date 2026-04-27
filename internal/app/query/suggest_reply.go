@@ -53,7 +53,7 @@ func (svc SuggestReplyService) Execute(ctx context.Context, q SuggestReplyQuery)
 		if errors.Is(err, service.ErrPermissionDenied) {
 			return SuggestReplyResult{}, apperrors.ErrForbidden
 		}
-		return SuggestReplyResult{}, err
+		return SuggestReplyResult{}, fmt.Errorf("authorize suggest reply: %w", err)
 	}
 
 	ticket, err := svc.ticketRepo.GetByID(ctx, q.TicketID)
@@ -61,7 +61,7 @@ func (svc SuggestReplyService) Execute(ctx context.Context, q SuggestReplyQuery)
 		if errors.Is(err, repository.ErrNotFound) {
 			return SuggestReplyResult{}, apperrors.ErrNotFound
 		}
-		return SuggestReplyResult{}, err
+		return SuggestReplyResult{}, fmt.Errorf("get ticket for suggest reply: %w", err)
 	}
 
 	if ticket.TenantID != q.Principal.TenantID {

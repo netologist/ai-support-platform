@@ -65,5 +65,9 @@ func (svc SemanticSearchService) Execute(ctx context.Context, q SemanticSearchQu
 		return SemanticSearchResult{}, err
 	}
 
+	if chunks == nil {
+		chunks = []entity.DocumentChunk{}
+	}
+
 	return SemanticSearchResult{Chunks: chunks}, nil
 }

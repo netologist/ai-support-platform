@@ -12,4 +12,5 @@ type OutboxRepository interface {
 	InsertEvent(ctx context.Context, event *entity.OutboxEvent) error
 	GetUnsentEvents(ctx context.Context, limit int) ([]*entity.OutboxEvent, error)
 	MarkEventSent(ctx context.Context, id uuid.UUID) error
+	IncrementAttemptCount(ctx context.Context, id uuid.UUID) error
 }

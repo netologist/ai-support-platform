@@ -3,7 +3,6 @@ package outbox
 import (
 	"context"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/netologist/ai-support-platform/internal/domain/repository"
@@ -13,13 +12,11 @@ import (
 const maxRetries = 5
 
 type Relay struct {
-	outbox           repository.OutboxRepository
-	publisher        service.MessagePublisher
-	topic            string
-	batchSize        int
-	interval         time.Duration
-	failureTracker   map[string]int // event ID -> failure count
-	failureTrackerMu sync.Mutex
+	outbox    repository.OutboxRepository
+	publisher service.MessagePublisher
+	topic     string
+	batchSize int
+	interval  time.Duration
 }
 
 func NewRelay(
@@ -30,12 +27,11 @@ func NewRelay(
 	interval time.Duration,
 ) *Relay {
 	return &Relay{
-		outbox:         outbox,
-		publisher:      publisher,
-		topic:          topic,
-		batchSize:      batchSize,
-		interval:       interval,
-		failureTracker: make(map[string]int),
+		outbox:    outbox,
+		publisher: publisher,
+		topic:     topic,
+		batchSize: batchSize,
+		interval:  interval,
 	}
 }
 
@@ -64,15 +60,11 @@ func (r *Relay) flush(ctx context.Context) error {
 	for _, event := range events {
 		eventIDStr := event.ID.String()
 
-		r.failureTrackerMu.Lock()
-		attempts := r.failureTracker[eventIDStr]
-		r.failureTrackerMu.Unlock()
-
-		if attempts >= maxRetries {
-			// Dead letter: mark event as sent but log warning
+		// AttemptCount is persisted in the DB, so retry budget survives relay restarts.
+		if event.AttemptCount >= maxRetries {
 			slog.Warn("outbox relay max retries exceeded, discarding event",
 				slog.String("event_id", eventIDStr),
-				slog.Int("attempts", attempts),
+				slog.Int("attempts", event.AttemptCount),
 			)
 			if err := r.outbox.MarkEventSent(ctx, event.ID); err != nil {
 				slog.Error("outbox relay failed to mark dead letter event as sent",
@@ -80,23 +72,22 @@ func (r *Relay) flush(ctx context.Context) error {
 					slog.Any("error", err),
 				)
 			}
-			r.failureTrackerMu.Lock()
-			delete(r.failureTracker, eventIDStr)
-			r.failureTrackerMu.Unlock()
 			continue
 		}
 
 		if err := r.publisher.PublishJSON(ctx, r.topic, event.AggregateID.String(), event); err != nil {
-			r.failureTrackerMu.Lock()
-			r.failureTracker[eventIDStr]++
-			r.failureTrackerMu.Unlock()
-
 			slog.Error("outbox relay publish failed",
 				slog.String("event_id", eventIDStr),
-				slog.Int("attempt", attempts+1),
+				slog.Int("attempt", event.AttemptCount+1),
 				slog.Int("max_retries", maxRetries),
 				slog.Any("error", err),
 			)
+			if err := r.outbox.IncrementAttemptCount(ctx, event.ID); err != nil {
+				slog.Error("outbox relay failed to increment attempt count",
+					slog.String("event_id", eventIDStr),
+					slog.Any("error", err),
+				)
+			}
 			continue
 		}
 
@@ -105,11 +96,6 @@ func (r *Relay) flush(ctx context.Context) error {
 				slog.String("event_id", eventIDStr),
 				slog.Any("error", err),
 			)
-		} else {
-			// Clear failure tracker on success
-			r.failureTrackerMu.Lock()
-			delete(r.failureTracker, eventIDStr)
-			r.failureTrackerMu.Unlock()
 		}
 	}
 

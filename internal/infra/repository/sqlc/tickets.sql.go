@@ -75,6 +75,15 @@ func (q *Queries) CreateTicket(ctx context.Context, arg CreateTicketParams) (Cre
 	return i, err
 }
 
+const deleteTicket = `-- name: DeleteTicket :exec
+DELETE FROM tickets WHERE id = $1
+`
+
+func (q *Queries) DeleteTicket(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteTicket, id)
+	return err
+}
+
 const getTicketByID = `-- name: GetTicketByID :one
 SELECT id, tenant_id, subject, status, created_by_user_id, assigned_to_user_id, created_at
 FROM tickets

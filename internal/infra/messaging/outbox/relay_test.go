@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -37,6 +38,30 @@ func TestRelay_FlushOnce(t *testing.T) {
 			name: "no events is a no-op",
 			setupMock: func(repo *mockrepository.MockOutboxRepository, pub *mockservice.MockMessagePublisher) {
 				repo.EXPECT().GetUnsentEvents(mock.Anything, 100).Return(nil, nil)
+			},
+		},
+		{
+			name: "publish failure increments DB attempt count",
+			setupMock: func(repo *mockrepository.MockOutboxRepository, pub *mockservice.MockMessagePublisher) {
+				eventID := uuid.New()
+				aggID := uuid.New()
+				repo.EXPECT().GetUnsentEvents(mock.Anything, 100).Return([]*entity.OutboxEvent{
+					{ID: eventID, AggregateID: aggID, AggregateType: "ticket", EventType: "ticket.created", Payload: []byte(`{}`), CreatedAt: time.Now(), AttemptCount: 1},
+				}, nil)
+				pub.EXPECT().PublishJSON(mock.Anything, "tickets", aggID.String(), mock.Anything).Return(assert.AnError)
+				repo.EXPECT().IncrementAttemptCount(mock.Anything, eventID).Return(nil)
+			},
+		},
+		{
+			name: "dead-letters event that has reached max retries",
+			setupMock: func(repo *mockrepository.MockOutboxRepository, pub *mockservice.MockMessagePublisher) {
+				eventID := uuid.New()
+				aggID := uuid.New()
+				repo.EXPECT().GetUnsentEvents(mock.Anything, 100).Return([]*entity.OutboxEvent{
+					{ID: eventID, AggregateID: aggID, AggregateType: "ticket", EventType: "ticket.created", Payload: []byte(`{}`), CreatedAt: time.Now(), AttemptCount: 5},
+				}, nil)
+				// Publisher must NOT be called; relay skips straight to dead-letter.
+				repo.EXPECT().MarkEventSent(mock.Anything, eventID).Return(nil)
 			},
 		},
 	}

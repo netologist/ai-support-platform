@@ -102,7 +102,7 @@ func TestCreateTicketService_Execute(t *testing.T) {
 			wantSubject: "My ticket",
 		},
 		{
-			name: "outbox failure is logged but ticket is still returned",
+			name: "outbox failure triggers compensating delete and returns error",
 			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, fixedPrincipal, "tickets", "create").Return(nil)
 				repo.EXPECT().Create(mock.Anything, mock.Anything).Return(entity.Ticket{
@@ -113,10 +113,9 @@ func TestCreateTicketService_Execute(t *testing.T) {
 					CreatedByUserID: fixedUserID,
 				}, nil)
 				outbox.EXPECT().InsertEvent(mock.Anything, mock.Anything).Return(errors.New("outbox db error"))
-				cache.EXPECT().SetTicket(mock.Anything, mock.Anything).Return(nil)
-				auditor.EXPECT().Record(mock.Anything, mock.Anything).Return(nil)
+				repo.EXPECT().Delete(mock.Anything, mock.Anything).Return(nil)
 			},
-			wantSubject: "My ticket",
+			wantErr: errors.New("outbox db error"),
 		},
 	}
 
