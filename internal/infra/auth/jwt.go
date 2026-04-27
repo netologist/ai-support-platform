@@ -19,8 +19,10 @@ type TokenManager struct {
 }
 
 type claims struct {
-	Email string `json:"email"`
-	jwt.RegisteredClaims
+    TenantID string `json:"tenant_id"`
+	Role     string `json:"role"`
+	Email    string `json:"email"`
+    jwt.RegisteredClaims
 }
 
 func NewTokenManager(issuer string, secret string, ttl time.Duration) TokenManager {
@@ -31,7 +33,9 @@ func (manager TokenManager) Issue(principal entity.Principal) (string, error) {
 	now := time.Now().UTC()
 	expiresAt := now.Add(manager.ttl)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
-		Email: principal.Email,
+		TenantID: principal.TenantID.String(),
+		Role:     principal.Role,
+		Email:    principal.Email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    manager.issuer,
 			Subject:   principal.UserID.String(),
@@ -65,6 +69,11 @@ func (manager TokenManager) Verify(rawToken string) (entity.Principal, error) {
 		return entity.Principal{}, ErrInvalidToken
 	}
 
+	tenantID, err := uuid.Parse(tokenClaims.TenantID)
+	if err != nil {
+		return entity.Principal{}, ErrInvalidToken
+	}
+
 	expiresAt := time.Time{}
 	if tokenClaims.ExpiresAt != nil {
 		expiresAt = tokenClaims.ExpiresAt.Time
@@ -72,7 +81,9 @@ func (manager TokenManager) Verify(rawToken string) (entity.Principal, error) {
 
 	return entity.Principal{
 		UserID:    userID,
+		TenantID:  tenantID,
 		Email:     tokenClaims.Email,
+		Role:      tokenClaims.Role,
 		ExpiresAt: expiresAt,
 	}, nil
 }
