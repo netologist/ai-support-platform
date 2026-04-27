@@ -47,14 +47,31 @@ func (s *LoginService) Execute(ctx context.Context, command LoginCommand) (Login
 	user, err := s.authRepository.FindUserByEmail(ctx, command.Email)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			// TODO: add record audit for not found user. But we should be careful to not leak information about which emails are registered in the system.
+			s.recordAudit(ctx, entity.AuditLog{
+				EventType: "auth.login",
+				Action:    "login",
+				Outcome:   "user_not_found",
+				TenantID:  &command.TenantID,
+				Resource:  "auth",
+				// Omit email from metadata to avoid leaking which addresses are registered.
+				Metadata: map[string]any{"reason": "user_not_found"},
+			})
 			return LoginResult{}, apperrors.ErrInvalidCredentials
 		}
 
 		return LoginResult{}, err
 	}
 	if err := s.passwordVerifier.Verify(user.PasswordHash, command.Password); err != nil {
-		// TODO: add record audit for invalid password. But we should be careful to not leak information about which emails are registered in the system.
+		s.recordAudit(ctx, entity.AuditLog{
+			EventType: "auth.login",
+			Action:    "login",
+			Outcome:   "invalid_password",
+			TenantID:  &command.TenantID,
+			UserID:    &user.ID,
+			Resource:  "auth",
+			// Omit email from metadata to avoid leaking which addresses are registered.
+			Metadata: map[string]any{"reason": "invalid_password"},
+		})
 		return LoginResult{}, apperrors.ErrInvalidCredentials
 	}
 

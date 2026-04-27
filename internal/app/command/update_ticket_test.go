@@ -45,7 +45,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 	tests := []struct {
 		name       string
 		cmd        command.UpdateTicketCommand
-		setupMocks func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository)
+		setupMocks func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository)
 		useNilDeps bool
 		wantErr    error
 		check      func(t *testing.T, ticket entity.Ticket)
@@ -57,7 +57,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				Principal: principal,
 				Subject:   ptr("New subject"),
 			},
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(nil)
 				repo.EXPECT().GetByID(mock.Anything, fixedTicketID).Return(existingTicket, nil)
 				repo.EXPECT().Update(mock.Anything, mock.MatchedBy(func(t entity.Ticket) bool {
@@ -73,7 +73,6 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				auditor.EXPECT().Record(mock.Anything, mock.MatchedBy(func(l entity.AuditLog) bool {
 					return l.EventType == "ticket.updated" && l.Outcome == "success"
 				})).Return(nil)
-				pub.EXPECT().PublishJSON(mock.Anything, "tickets", fixedTicketID.String(), mock.Anything).Return(nil)
 			},
 			check: func(t *testing.T, ticket entity.Ticket) {
 				assert.Equal(t, "New subject", ticket.Subject)
@@ -86,7 +85,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				Principal: principal,
 				Status:    ptr(entity.TicketStatusClosed),
 			},
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(nil)
 				repo.EXPECT().GetByID(mock.Anything, fixedTicketID).Return(existingTicket, nil)
 				repo.EXPECT().Update(mock.Anything, mock.MatchedBy(func(t entity.Ticket) bool {
@@ -100,7 +99,6 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				outbox.EXPECT().InsertEvent(mock.Anything, mock.Anything).Return(nil)
 				cache.EXPECT().SetTicket(mock.Anything, mock.Anything).Return(nil)
 				auditor.EXPECT().Record(mock.Anything, mock.Anything).Return(nil)
-				pub.EXPECT().PublishJSON(mock.Anything, "tickets", fixedTicketID.String(), mock.Anything).Return(nil)
 			},
 			check: func(t *testing.T, ticket entity.Ticket) {
 				assert.Equal(t, entity.TicketStatusClosed, ticket.Status)
@@ -113,7 +111,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				Principal: principal,
 				Subject:   ptr("Updated"),
 			},
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(nil)
 				repo.EXPECT().GetByID(mock.Anything, fixedTicketID).Return(existingTicket, nil)
 				repo.EXPECT().Update(mock.Anything, mock.Anything).Return(entity.Ticket{
@@ -133,7 +131,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				Principal: principal,
 				Subject:   ptr("x"),
 			},
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(service.ErrPermissionDenied)
 			},
 			wantErr: apperrors.ErrForbidden,
@@ -145,7 +143,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				Principal: principal,
 				Subject:   ptr("x"),
 			},
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(errors.New("authz error"))
 			},
 			wantErr: errors.New("authz error"),
@@ -156,7 +154,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				TicketID:  fixedTicketID,
 				Principal: principal,
 			},
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(nil)
 			},
 			wantErr: apperrors.ErrInvalidArgument,
@@ -168,7 +166,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				Principal: principal,
 				Subject:   ptr("x"),
 			},
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(nil)
 				repo.EXPECT().GetByID(mock.Anything, fixedTicketID).Return(entity.Ticket{}, repository.ErrNotFound)
 			},
@@ -181,7 +179,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				Principal: principal,
 				Subject:   ptr("x"),
 			},
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(nil)
 				repo.EXPECT().GetByID(mock.Anything, fixedTicketID).Return(entity.Ticket{
 					ID:       fixedTicketID,
@@ -197,7 +195,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				Principal: principal,
 				Subject:   ptr("   "),
 			},
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(nil)
 				repo.EXPECT().GetByID(mock.Anything, fixedTicketID).Return(existingTicket, nil)
 			},
@@ -210,7 +208,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				Principal: principal,
 				Status:    ptr("pending"),
 			},
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(nil)
 				repo.EXPECT().GetByID(mock.Anything, fixedTicketID).Return(existingTicket, nil)
 			},
@@ -223,7 +221,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				Principal: principal,
 				Subject:   ptr("x"),
 			},
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(nil)
 				repo.EXPECT().GetByID(mock.Anything, fixedTicketID).Return(existingTicket, nil)
 				repo.EXPECT().Update(mock.Anything, mock.Anything).Return(entity.Ticket{}, errors.New("db error"))
@@ -237,7 +235,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				Principal: principal,
 				Subject:   ptr("x"),
 			},
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(nil)
 				repo.EXPECT().GetByID(mock.Anything, fixedTicketID).Return(existingTicket, nil)
 				repo.EXPECT().Update(mock.Anything, mock.Anything).Return(entity.Ticket{}, repository.ErrNotFound)
@@ -251,7 +249,7 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				Principal: principal,
 				Subject:   ptr("New subject"),
 			},
-			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, outbox *mockrepo.MockOutboxRepository) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(nil)
 				repo.EXPECT().GetByID(mock.Anything, fixedTicketID).Return(existingTicket, nil)
 				repo.EXPECT().Update(mock.Anything, mock.Anything).Return(entity.Ticket{
@@ -263,7 +261,6 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 				outbox.EXPECT().InsertEvent(mock.Anything, mock.Anything).Return(errors.New("outbox db error"))
 				cache.EXPECT().SetTicket(mock.Anything, mock.Anything).Return(nil)
 				auditor.EXPECT().Record(mock.Anything, mock.Anything).Return(nil)
-				pub.EXPECT().PublishJSON(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			},
 			check: func(t *testing.T, ticket entity.Ticket) {
 				assert.Equal(t, "New subject", ticket.Subject)
@@ -279,20 +276,18 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 			outbox := mockrepo.NewMockOutboxRepository(t)
 
 			var cache *mocksvc.MockTicketCache
-			var pub *mocksvc.MockMessagePublisher
 			if !tc.useNilDeps {
 				cache = mocksvc.NewMockTicketCache(t)
-				pub = mocksvc.NewMockMessagePublisher(t)
 			}
 
-			tc.setupMocks(repo, auth, cache, auditor, pub, outbox)
+			tc.setupMocks(repo, auth, cache, auditor, outbox)
 
 			// Avoid typed-nil interface trap: pass untyped nil when deps are omitted.
 			var svc command.UpdateTicketService
 			if tc.useNilDeps {
-				svc = command.NewUpdateTicketService(repo, auth, nil, auditor, nil, "", nil)
+				svc = command.NewUpdateTicketService(repo, auth, nil, auditor, nil)
 			} else {
-				svc = command.NewUpdateTicketService(repo, auth, cache, auditor, pub, "tickets", outbox)
+				svc = command.NewUpdateTicketService(repo, auth, cache, auditor, outbox)
 			}
 
 			ticket, err := svc.Execute(context.Background(), tc.cmd)

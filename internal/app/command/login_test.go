@@ -67,6 +67,9 @@ func TestLoginService_Execute(t *testing.T) {
 			cmd:  fixedCmd,
 			setupMocks: func(repo *mockrepo.MockAuthRepository, verifier *mocksvc.MockPasswordVerifier, issuer *mocksvc.MockTokenIssuer, auditor *mocksvc.MockAuditLogger) {
 				repo.EXPECT().FindUserByEmail(mock.Anything, fixedUser.Email).Return(entity.User{}, repository.ErrNotFound)
+				auditor.EXPECT().Record(mock.Anything, mock.MatchedBy(func(log entity.AuditLog) bool {
+					return log.Outcome == "user_not_found" && log.EventType == "auth.login"
+				})).Return(nil)
 			},
 			wantErr: apperrors.ErrInvalidCredentials,
 		},
@@ -84,6 +87,9 @@ func TestLoginService_Execute(t *testing.T) {
 			setupMocks: func(repo *mockrepo.MockAuthRepository, verifier *mocksvc.MockPasswordVerifier, issuer *mocksvc.MockTokenIssuer, auditor *mocksvc.MockAuditLogger) {
 				repo.EXPECT().FindUserByEmail(mock.Anything, fixedUser.Email).Return(fixedUser, nil)
 				verifier.EXPECT().Verify(fixedUser.PasswordHash, fixedCmd.Password).Return(errors.New("bcrypt mismatch"))
+				auditor.EXPECT().Record(mock.Anything, mock.MatchedBy(func(log entity.AuditLog) bool {
+					return log.Outcome == "invalid_password" && log.EventType == "auth.login"
+				})).Return(nil)
 			},
 			wantErr: apperrors.ErrInvalidCredentials,
 		},

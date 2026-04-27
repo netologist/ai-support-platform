@@ -121,8 +121,6 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 		authorizer,
 		ticketCache,
 		auditLogger,
-		kafkaPublisher,
-		config.KafkaTicketTopic,
 		outboxRepository,
 	)
 
@@ -131,8 +129,6 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 		authorizer,
 		ticketCache,
 		auditLogger,
-		kafkaPublisher,
-		config.KafkaTicketTopic,
 		outboxRepository,
 	)
 

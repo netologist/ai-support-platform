@@ -25,8 +25,6 @@ type CreateTicketService struct {
 	authorizer       service.Authorizer
 	ticketCache      service.TicketCache
 	auditLogger      service.AuditLogger
-	publisher        service.MessagePublisher
-	topic            string
 	outbox           repository.OutboxRepository
 }
 
@@ -35,8 +33,6 @@ func NewCreateTicketService(
 	authorizer service.Authorizer,
 	ticketCache service.TicketCache,
 	auditLogger service.AuditLogger,
-	publisher service.MessagePublisher,
-	topic string,
 	outbox repository.OutboxRepository,
 ) CreateTicketService {
 	return CreateTicketService{
@@ -44,8 +40,6 @@ func NewCreateTicketService(
 		authorizer:       authorizer,
 		ticketCache:      ticketCache,
 		auditLogger:      auditLogger,
-		publisher:        publisher,
-		topic:            topic,
 		outbox:           outbox,
 	}
 }
@@ -109,13 +103,6 @@ func (svc CreateTicketService) Execute(ctx context.Context, command CreateTicket
 		ResourceID: createdTicket.ID.String(),
 		Metadata:   map[string]any{"status": createdTicket.Status},
 	})
-
-	if svc.publisher != nil && svc.topic != "" {
-		_ = svc.publisher.PublishJSON(ctx, svc.topic, createdTicket.ID.String(), map[string]any{
-			"event_type": "ticket.created",
-			"ticket":     createdTicket,
-		})
-	}
 
 	return createdTicket, nil
 }

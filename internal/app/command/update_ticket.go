@@ -28,8 +28,6 @@ type UpdateTicketService struct {
 	authorizer       service.Authorizer
 	ticketCache      service.TicketCache
 	auditLogger      service.AuditLogger
-	publisher        service.MessagePublisher
-	topic            string
 	outbox           repository.OutboxRepository
 }
 
@@ -38,8 +36,6 @@ func NewUpdateTicketService(
 	authorizer service.Authorizer,
 	ticketCache service.TicketCache,
 	auditLogger service.AuditLogger,
-	publisher service.MessagePublisher,
-	topic string,
 	outbox repository.OutboxRepository,
 ) UpdateTicketService {
 	return UpdateTicketService{
@@ -47,8 +43,6 @@ func NewUpdateTicketService(
 		authorizer:       authorizer,
 		ticketCache:      ticketCache,
 		auditLogger:      auditLogger,
-		publisher:        publisher,
-		topic:            topic,
 		outbox:           outbox,
 	}
 }
@@ -142,13 +136,6 @@ func (svc UpdateTicketService) Execute(ctx context.Context, command UpdateTicket
 			"subject": updatedTicket.Subject,
 		},
 	})
-
-	if svc.publisher != nil && svc.topic != "" {
-		_ = svc.publisher.PublishJSON(ctx, svc.topic, updatedTicket.ID.String(), map[string]any{
-			"event_type": "ticket.updated",
-			"ticket":     updatedTicket,
-		})
-	}
 
 	return updatedTicket, nil
 }
