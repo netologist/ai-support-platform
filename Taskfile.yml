@@ -43,6 +43,11 @@ tasks:
     cmds:
       - go tool air -c .air.api.toml
 
+  run:worker:
+    desc: Run Worker with hot reload
+    cmds:
+      - go tool air -c .air.worker.toml
+
   debug:api:
     desc: Start Delve for cmd/api on port {{.api_debug_port}}
     preconditions:

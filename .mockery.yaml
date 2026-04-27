@@ -80,3 +80,8 @@ packages:
       AIProvider:
         config:
           dir: internal/mocks/service
+  github.com/netologist/ai-support-platform/internal/infra/messaging/worker:
+    interfaces:
+      IdempotencyChecker:
+        config:
+          dir: internal/mocks/worker

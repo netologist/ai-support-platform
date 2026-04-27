@@ -6,18 +6,11 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go build -gcflags='all=-N -l' -o ./tmp/api ./cmd/api"
-  bin = "$GOBIN/dlv"
-  args_bin = [
-    "exec",
-    "./tmp/api",
-    "--headless",
-    "--listen=:2345",
-    "--api-version=2",
-    "--accept-multiclient"
-  ]
+  args_bin = []
+  bin = "./tmp/worker"
+  cmd = "go build -o ./tmp/worker ./cmd/worker"
   delay = 1000
-  entrypoint = []
+  entrypoint = ["./tmp/worker"]
   exclude_dir = ["assets", "tmp", "vendor", "testdata"]
   exclude_file = []
   exclude_regex = ["_test.go"]

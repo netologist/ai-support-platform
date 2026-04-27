@@ -23,8 +23,8 @@ import (
 )
 
 type APIRuntime struct {
-	Server  *http.Server
-	CloseFn func()
+	Server *http.Server
+	Close  func()
 }
 
 func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
@@ -194,7 +194,7 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 
 	return APIRuntime{
 		Server: server,
-		CloseFn: func() {
+		Close: func() {
 			closer.Close()
 		},
 	}, nil

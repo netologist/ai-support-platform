@@ -28,6 +28,8 @@ type Config struct {
 	RateLimitWindow        time.Duration
 	PublicRateLimit        int64
 	AuthenticatedRateLimit int64
+	WorkerPoolSize         int
+	WorkerPoolQueueSize    int
 }
 
 type rawConfig struct {
@@ -52,6 +54,8 @@ type rawConfig struct {
 	RateLimitWindow        time.Duration `envconfig:"APP_RATE_LIMIT_WINDOW" default:"1m"`
 	PublicRateLimit        int64         `envconfig:"APP_PUBLIC_RATE_LIMIT" default:"5"`
 	AuthenticatedRateLimit int64         `envconfig:"APP_AUTHENTICATED_RATE_LIMIT" default:"60"`
+	WorkerPoolSize         int           `envconfig:"APP_WORKER_POOL_SIZE" default:"4"`
+	WorkerPoolQueueSize    int           `envconfig:"APP_WORKER_POOL_QUEUE_SIZE" default:"100"`
 }
 
 func LoadConfig() (Config, error) {
@@ -80,6 +84,8 @@ func LoadConfig() (Config, error) {
 		RateLimitWindow:        raw.RateLimitWindow,
 		PublicRateLimit:        raw.PublicRateLimit,
 		AuthenticatedRateLimit: raw.AuthenticatedRateLimit,
+		WorkerPoolSize:         raw.WorkerPoolSize,
+		WorkerPoolQueueSize:    raw.WorkerPoolQueueSize,
 	}
 
 	if config.DatabaseURL == "" {

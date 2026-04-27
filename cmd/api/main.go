@@ -28,7 +28,7 @@ func main() {
 		slog.Error("build runtime", slog.Any("error", err))
 		os.Exit(1)
 	}
-	defer runtime.CloseFn()
+	defer runtime.Close()
 
 	go func() {
 		<-ctx.Done()

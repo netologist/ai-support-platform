@@ -1,0 +1,79 @@
+package provider
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+
+	"github.com/netologist/ai-support-platform/internal/infra/cache/idempotency"
+	messagingkafka "github.com/netologist/ai-support-platform/internal/infra/messaging/kafka"
+	"github.com/netologist/ai-support-platform/internal/infra/messaging/outbox"
+	"github.com/netologist/ai-support-platform/internal/infra/messaging/worker"
+	"github.com/netologist/ai-support-platform/internal/infra/messaging/worker/consumers"
+	postgresrepo "github.com/netologist/ai-support-platform/internal/infra/repository/postgres"
+	generated "github.com/netologist/ai-support-platform/internal/infra/repository/sqlc"
+)
+
+type WorkerRuntime struct {
+	Run   func(context.Context) error
+	Close func()
+}
+
+func NewWorkerRuntime(ctx context.Context, config Config) (WorkerRuntime, error) {
+	closer := &closerStack{}
+
+	databasePool, err := pgxpool.New(ctx, config.DatabaseURL)
+	if err != nil {
+		return WorkerRuntime{}, fmt.Errorf("connect postgres: %w", err)
+	}
+	closer.Add(databasePool.Close)
+
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     config.RedisAddress,
+		Password: config.RedisPassword,
+		DB:       config.RedisDatabase,
+	})
+	closer.AddWithError(redisClient.Close)
+
+	kafkaPublisher, err := messagingkafka.NewPublisher(config.KafkaBrokers)
+	if err != nil {
+		_ = closer.Close()
+		return WorkerRuntime{}, fmt.Errorf("build kafka publisher: %w", err)
+	}
+	closer.Add(kafkaPublisher.Close)
+
+	queries := generated.New(databasePool)
+	outboxRepo := postgresrepo.NewOutboxRepository(queries)
+
+	relay := outbox.NewRelay(outboxRepo, kafkaPublisher, config.KafkaTicketTopic, 100, 2*time.Second)
+
+	idempotencyStore := idempotency.NewStore(redisClient, 24*time.Hour)
+	ticketHandler := consumers.NewTicketEventHandler(idempotencyStore)
+
+	consumer, err := messagingkafka.NewConsumer(config.KafkaBrokers, "worker-group", []string{config.KafkaTicketTopic})
+	if err != nil {
+		_ = closer.Close()
+		return WorkerRuntime{}, fmt.Errorf("build kafka consumer: %w", err)
+	}
+	closer.Add(consumer.Close)
+
+	consumer.RegisterHandler(config.KafkaTicketTopic, ticketHandler.Handle)
+
+	pool := worker.NewPool(config.WorkerPoolSize, config.WorkerPoolQueueSize)
+
+	return WorkerRuntime{
+		Run: func(runCtx context.Context) error {
+			go relay.Run(runCtx)
+			pool.Start(runCtx)
+			defer pool.Stop()
+
+			return consumer.Run(runCtx)
+		},
+		Close: func() {
+			_ = closer.Close()
+		},
+	}, nil
+}

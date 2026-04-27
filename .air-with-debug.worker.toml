@@ -6,11 +6,11 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go build -gcflags='all=-N -l' -o ./tmp/api ./cmd/api"
+  cmd = "go build -gcflags='all=-N -l' -o ./tmp/worker ./cmd/worker"
   bin = "$GOBIN/dlv"
   args_bin = [
     "exec",
-    "./tmp/api",
+    "./tmp/worker",
     "--headless",
     "--listen=:2345",
     "--api-version=2",
