@@ -157,3 +157,192 @@ go tool task mocks -- --all --output internal/mocks
 - `debug:api` and `debug:worker` require `cmd/api` and `cmd/worker` directories to exist.
 - The E2E stack is defined in `compose.e2e.yaml` and exposes the API at `http://localhost:18080`.
 - E2E scenarios are implemented with Ginkgo/Gomega in `test/e2e`.
+
+## Technology stack and libraries
+
+### Core stack
+
+- Language: Go 1.26+
+- API: HTTP + OpenAPI + GraphQL
+- Datastores: PostgreSQL 17 + pgvector, Redis 8
+- Messaging: Apache Kafka (KRaft)
+- AI: Google Gemini via Eino provider abstraction
+- Runtime: Docker + Docker Compose (`compose.yaml`, `compose.e2e.yaml`)
+
+### Infrastructure services (local development)
+
+- `pgvector/pgvector:pg17` for PostgreSQL + vector similarity search
+- `redis:8-alpine` for cache/rate-limit/idempotency
+- `bitnamilegacy/kafka:3.9` for event streaming
+- `provectuslabs/kafka-ui` for Kafka topic and message inspection
+
+### Application/runtime libraries (direct dependencies)
+
+- `github.com/go-chi/chi/v5`: HTTP router and middleware composition
+- `github.com/getkin/kin-openapi`: OpenAPI parsing/validation utilities
+- `github.com/oapi-codegen/runtime`, `github.com/oapi-codegen/nethttp-middleware`: OpenAPI runtime/middleware support
+- `github.com/99designs/gqlgen`, `github.com/vektah/gqlparser/v2`: GraphQL schema-first API implementation
+- `github.com/swaggo/http-swagger/v2`: Swagger UI endpoint
+- `github.com/jackc/pgx/v5`: PostgreSQL driver/pool
+- `github.com/pgvector/pgvector-go`: pgvector integration for embeddings
+- `github.com/redis/go-redis/v9`: Redis client
+- `github.com/twmb/franz-go`: Kafka producer/consumer
+- `github.com/casbin/casbin/v2`: authorization policy engine
+- `github.com/golang-jwt/jwt/v5`: JWT token issuance/verification
+- `github.com/go-playground/validator/v10`: request validation
+- `github.com/google/uuid`: UUID generation/parsing
+- `github.com/kelseyhightower/envconfig`: environment-based config loading
+- `github.com/cloudwego/eino`: AI orchestration abstractions
+- `github.com/cloudwego/eino-ext/components/model/gemini`: Gemini model integration
+- `github.com/cloudwego/eino-ext/components/embedding/gemini`: Gemini embedding integration
+- `google.golang.org/genai`: Google GenAI client
+- `golang.org/x/crypto`: password hashing/security utilities
+- `github.com/stretchr/testify`: unit-test assertions/mocks helpers
+
+### Build, codegen, quality and developer tooling
+
+- `github.com/go-task/task/v3/cmd/task`: task runner (`go tool task`)
+- `github.com/air-verse/air`: live reload for API/worker
+- `github.com/go-delve/delve/cmd/dlv`: debugger
+- `golang.org/x/tools/cmd/goimports`: formatting and import management
+- `github.com/golangci/golangci-lint/cmd/golangci-lint`: lint orchestration
+- `honnef.co/go/tools/cmd/staticcheck`: static analysis
+- `golang.org/x/vuln/cmd/govulncheck`: vulnerability scanning
+- `gotest.tools/gotestsum`: test output and JUnit formatting
+- `github.com/pressly/goose/v3/cmd/goose`: migrations/seeds
+- `github.com/sqlc-dev/sqlc/cmd/sqlc`: SQL-to-Go code generation
+- `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen`: OpenAPI code generation
+- `github.com/99designs/gqlgen`: GraphQL code generation
+- `github.com/vektra/mockery/v2`: mocks generation
+- `github.com/bufbuild/buf/cmd/buf`: Protobuf/API tooling
+- `github.com/evilmartians/lefthook/v2`: Git hooks
+
+## Project structure overview
+
+The codebase follows a layered architecture:
+
+- `cmd/api`, `cmd/worker`: process entrypoints
+- `internal/app`: use-cases (commands/queries), executors, runtime wiring
+- `internal/domain`: entities, repository interfaces, service contracts
+- `internal/infra`: adapters for DB, cache, messaging, auth, AI
+- `internal/transport`: HTTP and GraphQL delivery layers
+- `migrations`: schema and seed SQL scripts
+- `openapi`: OpenAPI source and generation config
+- `test/e2e`: black-box end-to-end tests
+
+Request flow (high level):
+
+1. Transport layer receives request and resolves principal/context.
+2. Application service executes business use-case with authorization.
+3. Domain contracts are fulfilled by infrastructure adapters.
+4. Side effects (cache, audit, outbox/kafka) are executed.
+5. Response is returned via HTTP or GraphQL.
+
+## Sequence diagrams
+
+### 1) Create Ticket + Outbox + Worker
+
+```mermaid
+sequenceDiagram
+	autonumber
+	actor Client
+	participant API as API (HTTP)
+	participant Auth as Authorizer (Casbin)
+	participant TicketRepo as TicketRepository (Postgres)
+	participant Outbox as OutboxRepository (Postgres)
+	participant Cache as TicketCache (Redis)
+	participant Audit as AuditLogger
+	participant Relay as Worker Outbox Relay
+	participant Kafka as Kafka
+	participant Consumer as Worker Consumer
+
+	Client->>API: POST /tickets
+	API->>Auth: Authorize(principal, tickets:create)
+	Auth-->>API: allowed
+	API->>TicketRepo: Create(ticket)
+	TicketRepo-->>API: created ticket
+	API->>Outbox: InsertEvent(ticket.created)
+	API->>Cache: SetTicket(ticket)
+	API->>Audit: Record(ticket.created)
+	API-->>Client: 201 Created
+
+	Relay->>Outbox: Fetch unpublished events
+	Relay->>Kafka: Publish ticket.created
+	Relay->>Outbox: MarkPublished
+	Consumer->>Kafka: Consume ticket.created
+```
+
+### 2) Ingest Document + Embedding + Vector Search readiness
+
+```mermaid
+sequenceDiagram
+	autonumber
+	actor Admin
+	participant API as API (HTTP)
+	participant Auth as Authorizer (Casbin)
+	participant DocRepo as DocumentRepository (Postgres)
+	participant Chunker as Chunker Service
+	participant Embed as Embedding Provider (Gemini/Eino)
+	participant ChunkRepo as ChunkRepository (pgvector)
+	participant Audit as AuditLogger
+
+	Admin->>API: POST /documents (content)
+	API->>Auth: Authorize(principal, documents:create)
+	Auth-->>API: allowed
+	API->>DocRepo: CreateDocument(metadata)
+	API->>Chunker: Chunk(content, 512)
+	loop for each chunk
+		API->>Embed: Embed(chunk)
+		Embed-->>API: vector[1536]
+	end
+	API->>ChunkRepo: InsertChunks(chunks + vectors)
+	API->>Audit: Record(document.ingested)
+	API-->>Admin: 201 Created
+```
+
+## C4 component diagram
+
+The following diagram is a C4-style component view of the main containers and components in this repository.
+
+```mermaid
+flowchart LR
+	subgraph ClientZone[Clients]
+		Client[Support Agent / Admin UI]
+	end
+
+	subgraph APIContainer[Container: API Service (cmd/api)]
+		HTTP[Transport: HTTP Router]
+		GQL[Transport: GraphQL Handler]
+		AppSvc[Application Services\nCommands/Queries]
+		Auth[Auth Component\nJWT + Casbin]
+	end
+
+	subgraph WorkerContainer[Container: Worker Service (cmd/worker)]
+		Relay[Outbox Relay]
+		Consumers[Kafka Consumers]
+		Idem[Idempotency Store]
+	end
+
+	subgraph DataInfra[Infrastructure]
+		PG[(PostgreSQL + pgvector)]
+		Redis[(Redis)]
+		Kafka[(Kafka)]
+		Gemini[Gemini AI Provider]
+	end
+
+	Client --> HTTP
+	Client --> GQL
+	HTTP --> AppSvc
+	GQL --> AppSvc
+	AppSvc --> Auth
+	AppSvc --> Redis
+	AppSvc --> Gemini
+	AppSvc --> PG
+
+	AppSvc -->|outbox writes| PG
+	Relay -->|read unpublished events| PG
+	Relay -->|publish| Kafka
+	Consumers -->|consume| Kafka
+	Consumers --> Idem
+	Idem --> Redis
+```
