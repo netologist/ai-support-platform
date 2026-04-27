@@ -105,6 +105,14 @@ Run tests with the race detector:
 go tool task test
 ```
 
+Run containerized black-box E2E tests:
+
+```bash
+go tool task e2e:up
+go tool task e2e:test
+go tool task e2e:down
+```
+
 Run tests with coverage and write a JUnit report to `tmp/unit-tests.xml`:
 
 ```bash
@@ -147,3 +155,5 @@ go tool task mocks -- --all --output internal/mocks
 - Coverage artifacts are written under `tmp/`.
 - `migrate` and `mocks` are thin wrappers around `go tool goose` and `go tool mockery` so you can keep command usage flexible.
 - `debug:api` and `debug:worker` require `cmd/api` and `cmd/worker` directories to exist.
+- The E2E stack is defined in `compose.e2e.yaml` and exposes the API at `http://localhost:18080`.
+- E2E scenarios are implemented with Ginkgo/Gomega in `test/e2e`.

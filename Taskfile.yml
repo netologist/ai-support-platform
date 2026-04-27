@@ -122,3 +122,19 @@ tasks:
       - go tool sqlc generate
       - go tool oapi-codegen -config openapi/config.yaml openapi/spec.yaml
       - go tool gqlgen generate
+
+  e2e:up:
+    desc: Build and start containerized E2E environment
+    cmds:
+      - docker-compose -f compose.e2e.yaml up -d --build
+
+  e2e:down:
+    desc: Stop E2E environment and remove volumes
+    cmds:
+      - docker-compose -f compose.e2e.yaml down --remove-orphans -v
+
+  e2e:test:
+    desc: Run black-box E2E suite inside compose.e2e stack
+    cmds:
+      - docker-compose -f compose.e2e.yaml up --build --force-recreate
+        --exit-code-from e2e e2e

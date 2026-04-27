@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -74,6 +75,7 @@ func NewRouter(dependencies Dependencies) http.Handler {
 			))
 			router.Use(authenticatedMiddlewareForGraphql(dependencies))
 			router.Post("/graphql", dependencies.GraphQLHandler.ServeHTTP)
+            router.Get("/playground", playground.Handler("GraphQL Playground", "/graphql"))
 		})
 	}
 

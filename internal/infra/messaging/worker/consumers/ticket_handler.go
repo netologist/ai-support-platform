@@ -19,7 +19,7 @@ func NewTicketEventHandler(idempotency worker.IdempotencyChecker) *TicketEventHa
 
 func (h *TicketEventHandler) Handle(ctx context.Context, topic string, key []byte, value []byte) error {
 	var envelope struct {
-		EventType string `json:"event_type"`
+		EventType string `json:"EventType"`
 	}
 	if err := json.Unmarshal(value, &envelope); err != nil {
 		return fmt.Errorf("unmarshal event envelope: %w", err)
