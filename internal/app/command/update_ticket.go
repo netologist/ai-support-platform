@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -109,14 +110,19 @@ func (svc UpdateTicketService) Execute(ctx context.Context, command UpdateTicket
 			"event_type": "ticket.updated",
 			"ticket":     updatedTicket,
 		})
-		_ = svc.outbox.InsertEvent(ctx, &entity.OutboxEvent{
+		if err := svc.outbox.InsertEvent(ctx, &entity.OutboxEvent{
 			ID:            uuid.New(),
 			AggregateType: "ticket",
 			AggregateID:   updatedTicket.ID,
 			EventType:     "ticket.updated",
 			Payload:       payload,
 			CreatedAt:     time.Now().UTC(),
-		})
+		}); err != nil {
+			slog.Error("outbox insert failed after ticket update",
+				slog.String("ticket_id", updatedTicket.ID.String()),
+				slog.Any("error", err),
+			)
+		}
 	}
 
 	if svc.ticketCache != nil {

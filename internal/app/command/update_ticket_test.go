@@ -244,6 +244,31 @@ func TestUpdateTicketService_Execute(t *testing.T) {
 			},
 			wantErr: apperrors.ErrNotFound,
 		},
+		{
+			name: "outbox failure is logged but updated ticket is still returned",
+			cmd: command.UpdateTicketCommand{
+				TicketID:  fixedTicketID,
+				Principal: principal,
+				Subject:   ptr("New subject"),
+			},
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+				auth.EXPECT().Authorize(mock.Anything, principal, "tickets", "update").Return(nil)
+				repo.EXPECT().GetByID(mock.Anything, fixedTicketID).Return(existingTicket, nil)
+				repo.EXPECT().Update(mock.Anything, mock.Anything).Return(entity.Ticket{
+					ID:       fixedTicketID,
+					TenantID: fixedTenantID,
+					Subject:  "New subject",
+					Status:   entity.TicketStatusOpen,
+				}, nil)
+				outbox.EXPECT().InsertEvent(mock.Anything, mock.Anything).Return(errors.New("outbox db error"))
+				cache.EXPECT().SetTicket(mock.Anything, mock.Anything).Return(nil)
+				auditor.EXPECT().Record(mock.Anything, mock.Anything).Return(nil)
+				pub.EXPECT().PublishJSON(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+			},
+			check: func(t *testing.T, ticket entity.Ticket) {
+				assert.Equal(t, "New subject", ticket.Subject)
+			},
+		},
 	}
 
 	for _, tc := range tests {

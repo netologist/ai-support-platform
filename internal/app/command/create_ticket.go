@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -79,14 +80,19 @@ func (svc CreateTicketService) Execute(ctx context.Context, command CreateTicket
 			"event_type": "ticket.created",
 			"ticket":     createdTicket,
 		})
-		_ = svc.outbox.InsertEvent(ctx, &entity.OutboxEvent{
+		if err := svc.outbox.InsertEvent(ctx, &entity.OutboxEvent{
 			ID:            uuid.New(),
 			AggregateType: "ticket",
 			AggregateID:   createdTicket.ID,
 			EventType:     "ticket.created",
 			Payload:       payload,
 			CreatedAt:     now,
-		})
+		}); err != nil {
+			slog.Error("outbox insert failed after ticket create",
+				slog.String("ticket_id", createdTicket.ID.String()),
+				slog.Any("error", err),
+			)
+		}
 	}
 
 	if svc.ticketCache != nil {

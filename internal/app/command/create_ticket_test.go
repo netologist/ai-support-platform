@@ -102,6 +102,24 @@ func TestCreateTicketService_Execute(t *testing.T) {
 			useNilDeps:  true,
 			wantSubject: "My ticket",
 		},
+		{
+			name: "outbox failure is logged but ticket is still returned",
+			setupMocks: func(repo *mockrepo.MockTicketRepository, auth *mocksvc.MockAuthorizer, cache *mocksvc.MockTicketCache, auditor *mocksvc.MockAuditLogger, pub *mocksvc.MockMessagePublisher, outbox *mockrepo.MockOutboxRepository) {
+				auth.EXPECT().Authorize(mock.Anything, fixedPrincipal, "tickets", "create").Return(nil)
+				repo.EXPECT().Create(mock.Anything, mock.Anything).Return(entity.Ticket{
+					ID:              uuid.New(),
+					TenantID:        fixedTenantID,
+					Subject:         "My ticket",
+					Status:          entity.TicketStatusOpen,
+					CreatedByUserID: fixedUserID,
+				}, nil)
+				outbox.EXPECT().InsertEvent(mock.Anything, mock.Anything).Return(errors.New("outbox db error"))
+				cache.EXPECT().SetTicket(mock.Anything, mock.Anything).Return(nil)
+				auditor.EXPECT().Record(mock.Anything, mock.Anything).Return(nil)
+				pub.EXPECT().PublishJSON(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+			},
+			wantSubject: "My ticket",
+		},
 	}
 
 	for _, tc := range tests {
