@@ -7,6 +7,11 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
+// maxHandlerRetries is the number of times a handler is retried before a
+// record is dead-lettered (committed and skipped). This prevents a persistently
+// failing message from blocking the consumer indefinitely.
+const maxHandlerRetries = 3
+
 type Handler func(ctx context.Context, topic string, key []byte, value []byte) error
 
 type Consumer struct {
@@ -55,14 +60,7 @@ func (c *Consumer) Run(ctx context.Context) error {
 				return
 			}
 
-			if err := handler(ctx, record.Topic, record.Key, record.Value); err != nil {
-				slog.Error("handler failed",
-					slog.String("topic", record.Topic),
-					slog.String("key", string(record.Key)),
-					slog.Any("error", err),
-				)
-				return
-			}
+			c.processWithRetry(ctx, handler, record)
 		})
 
 		if err := c.client.CommitUncommittedOffsets(ctx); err != nil {
@@ -71,8 +69,42 @@ func (c *Consumer) Run(ctx context.Context) error {
 	}
 }
 
+// processWithRetry calls the handler up to maxHandlerRetries times. On
+// persistent failure the record is dead-lettered: logged at ERROR level so an
+// alerting rule can fire, and the offset is committed on the next
+// CommitUncommittedOffsets call so the consumer does not loop forever.
+func (c *Consumer) processWithRetry(ctx context.Context, handler Handler, record *kgo.Record) {
+	var lastErr error
+	for attempt := 1; attempt <= maxHandlerRetries; attempt++ {
+		if lastErr = handler(ctx, record.Topic, record.Key, record.Value); lastErr == nil {
+			return
+		}
+		slog.Warn("handler failed, will retry",
+			slog.String("topic", record.Topic),
+			slog.String("key", string(record.Key)),
+			slog.Int64("offset", record.Offset),
+			slog.Int("attempt", attempt),
+			slog.Int("max_retries", maxHandlerRetries),
+			slog.Any("error", lastErr),
+		)
+	}
+
+	// All retries exhausted — dead-letter: log the full record context so an
+	// operator can inspect and replay from the Kafka topic if needed. The offset
+	// is committed by the surrounding CommitUncommittedOffsets so the consumer
+	// advances past this record and does not stall.
+	slog.Error("handler failed after max retries, dead-lettering record",
+		slog.String("topic", record.Topic),
+		slog.String("key", string(record.Key)),
+		slog.Int64("partition", int64(record.Partition)),
+		slog.Int64("offset", record.Offset),
+		slog.Any("error", lastErr),
+	)
+}
+
 func (c *Consumer) Close() {
 	if c.client != nil {
 		c.client.Close()
 	}
 }
+

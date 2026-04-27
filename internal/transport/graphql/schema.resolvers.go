@@ -7,37 +7,153 @@ package graphql
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
+
+	"github.com/netologist/ai-support-platform/internal/app/query"
+	appTransport "github.com/netologist/ai-support-platform/internal/transport"
 	"github.com/netologist/ai-support-platform/internal/transport/graphql/model"
 )
 
 // Ticket is the resolver for the ticket field.
 func (r *queryResolver) Ticket(ctx context.Context, id string) (*model.Ticket, error) {
-	panic(fmt.Errorf("not implemented: Ticket - ticket"))
+	principal, ok := appTransport.PrincipalFromContext(ctx)
+	if !ok {
+		return nil, errors.New("missing authenticated principal")
+	}
+
+	ticketID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ticket id: %w", err)
+	}
+
+	ticket, err := r.deps.GetTicketService.Execute(ctx, query.GetTicketQuery{
+		TicketID:  ticketID,
+		Principal: principal,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return domainTicketToModel(ticket), nil
 }
 
 // Tickets is the resolver for the tickets field.
 func (r *queryResolver) Tickets(ctx context.Context) ([]*model.Ticket, error) {
-	panic(fmt.Errorf("not implemented: Tickets - tickets"))
+	principal, ok := appTransport.PrincipalFromContext(ctx)
+	if !ok {
+		return nil, errors.New("missing authenticated principal")
+	}
+
+	if r.deps.ListTicketsService == (query.ListTicketsService{}) {
+		return nil, errors.New("tickets service not available")
+	}
+
+	tickets, err := r.deps.ListTicketsService.Execute(ctx, query.ListTicketsQuery{Principal: principal})
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*model.Ticket, 0, len(tickets))
+	for _, t := range tickets {
+		result = append(result, domainTicketToModel(t))
+	}
+
+	return result, nil
 }
 
 // Documents is the resolver for the documents field.
 func (r *queryResolver) Documents(ctx context.Context) ([]*model.Document, error) {
-	panic(fmt.Errorf("not implemented: Documents - documents"))
+	principal, ok := appTransport.PrincipalFromContext(ctx)
+	if !ok {
+		return nil, errors.New("missing authenticated principal")
+	}
+
+	if r.deps.ListDocumentsService == (query.ListDocumentsService{}) {
+		return nil, errors.New("documents service not available")
+	}
+
+	documents, err := r.deps.ListDocumentsService.Execute(ctx, query.ListDocumentsQuery{Principal: principal})
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*model.Document, 0, len(documents))
+	for _, d := range documents {
+		result = append(result, domainDocumentToModel(d))
+	}
+
+	return result, nil
 }
 
 // SuggestReply is the resolver for the suggestReply field.
 func (r *queryResolver) SuggestReply(ctx context.Context, ticketID string) (*model.SuggestReplyResult, error) {
-	panic(fmt.Errorf("not implemented: SuggestReply - suggestReply"))
+	principal, ok := appTransport.PrincipalFromContext(ctx)
+	if !ok {
+		return nil, errors.New("missing authenticated principal")
+	}
+
+	id, err := uuid.Parse(ticketID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ticket id: %w", err)
+	}
+
+	result, err := r.deps.SuggestReplyService.Execute(ctx, query.SuggestReplyQuery{
+		Principal: principal,
+		TicketID:  id,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	sources := make([]*model.DocumentChunk, 0, len(result.Sources))
+	for _, s := range result.Sources {
+		sources = append(sources, domainChunkToModel(s))
+	}
+
+	return &model.SuggestReplyResult{
+		SuggestedReply: result.SuggestedReply,
+		Sources:        sources,
+	}, nil
 }
 
 // SearchDocuments is the resolver for the searchDocuments field.
-func (r *queryResolver) SearchDocuments(ctx context.Context, query string, limit *int32) ([]*model.DocumentChunk, error) {
-	panic(fmt.Errorf("not implemented: SearchDocuments - searchDocuments"))
+func (r *queryResolver) SearchDocuments(ctx context.Context, queryText string, limit *int32) ([]*model.DocumentChunk, error) {
+	principal, ok := appTransport.PrincipalFromContext(ctx)
+	if !ok {
+		return nil, errors.New("missing authenticated principal")
+	}
+
+	if r.deps.SemanticSearchService == (query.SemanticSearchService{}) {
+		return nil, errors.New("semantic search service not available")
+	}
+
+	searchLimit := 5 // schema default
+	if limit != nil {
+		searchLimit = int(*limit)
+	}
+
+	result, err := r.deps.SemanticSearchService.Execute(ctx, query.SemanticSearchQuery{
+		Principal: principal,
+		Text:      queryText,
+		Limit:     searchLimit,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	chunks := make([]*model.DocumentChunk, 0, len(result.Chunks))
+	for _, c := range result.Chunks {
+		chunks = append(chunks, domainChunkToModel(c))
+	}
+
+	return chunks, nil
 }
 
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
 type queryResolver struct{ *Resolver }
+

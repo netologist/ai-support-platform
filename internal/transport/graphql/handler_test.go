@@ -113,7 +113,7 @@ func TestHandler_ServeHTTP_SearchDocumentsAndSuggestReply(t *testing.T) {
 		SuggestReplyService:   query.NewSuggestReplyService(ticketRepo, chunkRepo, embedder, aiProvider, authorizer),
 	})
 
-	body := bytes.NewBufferString(`{"query":"query Search($query: String!, $limit: Int!, $ticketId: ID!) { searchDocuments(query: $query, limit: $limit) { id } suggestReply(ticketId: $ticketId) { suggestedReply } }","variables":{"query":"password reset","limit":2,"ticketId":"` + ticketID.String() + `"}}`)
+	body := bytes.NewBufferString(`{"query":"query Search($query: String!, $limit: Int!, $ticketId: ID!) { searchDocuments(query: $query, limit: $limit) { id content } suggestReply(ticketId: $ticketId) { suggestedReply } }","variables":{"query":"password reset","limit":2,"ticketId":"` + ticketID.String() + `"}}`)
 	request := httptest.NewRequest(http.MethodPost, "/graphql", body)
 	request.Header.Set("Content-Type", "application/json")
 	request = request.WithContext(transport.WithPrincipal(request.Context(), principal))
