@@ -118,7 +118,17 @@ func (p *EinoProvider) Classify(ctx context.Context, text string, categories []s
 		return "", fmt.Errorf("eino classify: %w", err)
 	}
 
-	return strings.TrimSpace(resp.Content), nil
+	result := strings.TrimSpace(resp.Content)
+
+	// Validate that result is in the allowed categories
+	for _, cat := range categories {
+		if strings.EqualFold(result, cat) {
+			return result, nil
+		}
+	}
+
+	// If result is not in allowed categories, return error
+	return "", fmt.Errorf("eino classify: returned category %q not in allowed categories %v", result, categories)
 }
 
 func (p *EinoProvider) Embed(ctx context.Context, text string) ([]float32, error) {

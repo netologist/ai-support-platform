@@ -25,10 +25,8 @@ func TestGetTicketService_Execute(t *testing.T) {
 	principal := entity.Principal{UserID: uuid.New(), TenantID: uuid.New(), Role: "agent"}
 	ticketID := uuid.New()
 	queryInput := query.GetTicketQuery{
-		TicketID:   ticketID,
-		Principal:  principal,
-		Resource:   "tickets",
-		ActionName: "read",
+		TicketID:  ticketID,
+		Principal: principal,
 	}
 
 	tests := []struct {

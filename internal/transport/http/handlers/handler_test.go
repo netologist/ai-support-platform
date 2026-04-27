@@ -39,7 +39,11 @@ func newLoginHandler(
 ) *handlers.Handlers {
 	t.Helper()
 	svc := command.NewLoginService(repo, verifier, issuer, auditLogger)
-	return handlers.New(svc, nil, nil, nil, nil, nil, nil, 100, 100, time.Minute)
+	return handlers.New(svc, nil, nil, nil, nil, nil, nil, handlers.HandlerConfig{
+		PublicRateLimit:        100,
+		AuthenticatedRateLimit: 100,
+		RateLimitWindow:        time.Minute,
+	})
 }
 
 func newTicketHandler(
@@ -50,7 +54,11 @@ func newTicketHandler(
 	getExec *mockexec.MockGetTicketExecutor,
 ) *handlers.Handlers {
 	t.Helper()
-	return handlers.New(nil, createExec, updateExec, listExec, getExec, nil, nil, 100, 100, time.Minute)
+	return handlers.New(nil, createExec, updateExec, listExec, getExec, nil, nil, handlers.HandlerConfig{
+		PublicRateLimit:        100,
+		AuthenticatedRateLimit: 100,
+		RateLimitWindow:        time.Minute,
+	})
 }
 
 func loginRequest(t *testing.T, body any) *http.Request {
@@ -312,10 +320,8 @@ func TestGetTicket(t *testing.T) {
 	fixedTicket := entity.Ticket{ID: fixedTicketID, TenantID: fixedTenantID, Subject: "Support request", Status: "open", CreatedByUserID: fixedUserID}
 
 	fixedQuery := query.GetTicketQuery{
-		TicketID:   fixedTicketID,
-		Principal:  fixedPrincipal,
-		Resource:   "tickets",
-		ActionName: "read",
+		TicketID:  fixedTicketID,
+		Principal: fixedPrincipal,
 	}
 
 	tests := []struct {
@@ -571,7 +577,11 @@ func TestDocumentHandlers(t *testing.T) {
 		CreatedAt:       createdAt,
 	}
 
-	h := handlers.New(nil, nil, nil, nil, nil, ingestExec, listExec, 100, 100, time.Minute)
+	h := handlers.New(nil, nil, nil, nil, nil, ingestExec, listExec, handlers.HandlerConfig{
+		PublicRateLimit:        100,
+		AuthenticatedRateLimit: 100,
+		RateLimitWindow:        time.Minute,
+	})
 
 	t.Run("list documents missing principal returns 401", func(t *testing.T) {
 		req := ticketRequest(t, http.MethodGet, "/v1/documents", nil)

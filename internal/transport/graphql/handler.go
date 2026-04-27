@@ -144,10 +144,8 @@ func (h *Handler) ResolveTicket(ctx context.Context, principal entity.Principal,
 	}
 
 	ticket, err := h.deps.GetTicketService.Execute(ctx, query.GetTicketQuery{
-		TicketID:   ticketID,
-		Principal:  principal,
-		Resource:   "tickets",
-		ActionName: "read",
+		TicketID:  ticketID,
+		Principal: principal,
 	})
 	if err != nil {
 		return nil, err

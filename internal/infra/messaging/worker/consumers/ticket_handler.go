@@ -37,8 +37,10 @@ func (h *TicketEventHandler) Handle(ctx context.Context, topic string, key []byt
 
 	switch envelope.EventType {
 	case "ticket.created":
+		// TODO: Implement ticket creation workflow (e.g., send notifications, update analytics)
 		slog.Info("processing ticket.created", slog.String("key", string(key)))
 	case "ticket.updated":
+		// TODO: Implement ticket update workflow (e.g., send notifications, update related entities)
 		slog.Info("processing ticket.updated", slog.String("key", string(key)))
 	default:
 		slog.Warn("unknown event type", slog.String("event_type", envelope.EventType))

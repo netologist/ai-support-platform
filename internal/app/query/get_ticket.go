@@ -13,10 +13,8 @@ import (
 )
 
 type GetTicketQuery struct {
-	TicketID   uuid.UUID
-	Principal  entity.Principal
-	Resource   string
-	ActionName string
+	TicketID  uuid.UUID
+	Principal entity.Principal
 }
 
 type GetTicketService struct {
@@ -31,7 +29,11 @@ func NewGetTicketService(ticketRepository repository.TicketRepository, authorize
 }
 
 func (svc GetTicketService) Execute(ctx context.Context, query GetTicketQuery) (entity.Ticket, error) {
-	if err := svc.authorizer.Authorize(ctx, query.Principal, query.Resource, query.ActionName); err != nil {
+	const (
+		resource = "tickets"
+		action   = "read"
+	)
+	if err := svc.authorizer.Authorize(ctx, query.Principal, resource, action); err != nil {
 		if errors.Is(err, service.ErrPermissionDenied) {
 			svc.recordAudit(ctx, entity.AuditLog{EventType: "ticket.read", Action: "read", Outcome: "forbidden", TenantID: &query.Principal.TenantID, UserID: &query.Principal.UserID, Resource: "ticket", ResourceID: query.TicketID.String()})
 			return entity.Ticket{}, apperrors.ErrForbidden

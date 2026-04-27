@@ -61,11 +61,6 @@ func (r *OutboxRepository) GetUnsentEvents(ctx context.Context, limit int) ([]*e
 	return events, nil
 }
 
-func (r *OutboxRepository) MarkEventSent(ctx context.Context, id string) error {
-	uid, err := uuid.Parse(id)
-	if err != nil {
-		return err
-	}
-
-	return r.queries.MarkOutboxEventSent(ctx, toPGUUID(uid))
+func (r *OutboxRepository) MarkEventSent(ctx context.Context, id uuid.UUID) error {
+	return r.queries.MarkOutboxEventSent(ctx, toPGUUID(id))
 }

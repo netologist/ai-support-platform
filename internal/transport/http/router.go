@@ -44,7 +44,7 @@ type Dependencies struct {
 func NewRouter(dependencies Dependencies) http.Handler {
 	swagger, err := handlers.GetSwagger()
 	if err != nil {
-		log.Fatal("swagger yüklenemedi:", err)
+		log.Fatal("failed to load swagger spec:", err)
 	}
 	swagger.Servers = nil
 
@@ -89,9 +89,11 @@ func NewRouter(dependencies Dependencies) http.Handler {
 			dependencies.GetTicketExecutor,
 			dependencies.IngestDocumentExecutor,
 			dependencies.ListDocumentsExecutor,
-			dependencies.PublicRateLimit,
-			dependencies.AuthenticatedRateLimit,
-			dependencies.RateLimitWindow,
+			handlers.HandlerConfig{
+				PublicRateLimit:        dependencies.PublicRateLimit,
+				AuthenticatedRateLimit: dependencies.AuthenticatedRateLimit,
+				RateLimitWindow:        dependencies.RateLimitWindow,
+			},
 		), handlers.ChiServerOptions{
 			BaseRouter: r,
 			Middlewares: []handlers.MiddlewareFunc{

@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -95,6 +96,14 @@ func (svc IngestDocumentService) Execute(ctx context.Context, cmd IngestDocument
 	}
 
 	if err := svc.chunkRepo.InsertChunks(ctx, domainChunks); err != nil {
+		// Compensating action: delete document to maintain consistency
+		if delErr := svc.documentRepo.DeleteDocument(ctx, createdDoc.ID); delErr != nil {
+			slog.Error("failed to delete document after chunk insert failure",
+				slog.String("document_id", createdDoc.ID.String()),
+				slog.Any("delete_error", delErr),
+				slog.Any("insert_error", err),
+			)
+		}
 		return entity.KnowledgeDocument{}, err
 	}
 

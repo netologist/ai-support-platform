@@ -23,6 +23,10 @@ FROM knowledge_documents
 WHERE tenant_id = $1
 ORDER BY created_at DESC;
 
+-- name: DeleteDocument :exec
+DELETE FROM knowledge_documents
+WHERE id = $1;
+
 -- name: InsertDocumentChunk :exec
 INSERT INTO document_chunks (
 	id,

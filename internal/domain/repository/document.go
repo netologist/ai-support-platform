@@ -12,6 +12,7 @@ type DocumentRepository interface {
 	CreateDocument(ctx context.Context, doc entity.KnowledgeDocument) (entity.KnowledgeDocument, error)
 	GetDocumentByID(ctx context.Context, id uuid.UUID) (entity.KnowledgeDocument, error)
 	ListDocumentsByTenant(ctx context.Context, tenantID uuid.UUID) ([]entity.KnowledgeDocument, error)
+	DeleteDocument(ctx context.Context, id uuid.UUID) error
 }
 
 type ChunkRepository interface {

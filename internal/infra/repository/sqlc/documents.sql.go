@@ -56,6 +56,16 @@ func (q *Queries) CreateDocument(ctx context.Context, arg CreateDocumentParams) 
 	return i, err
 }
 
+const deleteDocument = `-- name: DeleteDocument :exec
+DELETE FROM knowledge_documents
+WHERE id = $1
+`
+
+func (q *Queries) DeleteDocument(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteDocument, id)
+	return err
+}
+
 const getDocumentByID = `-- name: GetDocumentByID :one
 SELECT id, tenant_id, title, source_uri, created_by_user_id, created_at
 FROM knowledge_documents

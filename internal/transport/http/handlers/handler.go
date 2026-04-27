@@ -21,6 +21,12 @@ import (
 
 var _ ServerInterface = (*Handlers)(nil)
 
+type HandlerConfig struct {
+	PublicRateLimit        int64
+	AuthenticatedRateLimit int64
+	RateLimitWindow        time.Duration
+}
+
 func New(
 	loginExecutor executor.LoginExecutor,
 	createTicketExecutor executor.CreateTicketExecutor,
@@ -29,18 +35,16 @@ func New(
 	getTicketExecutor executor.GetTicketExecutor,
 	ingestDocumentService executor.IngestDocumentExecutor,
 	listDocumentsService executor.ListDocumentsExecutor,
-	publicRateLimit int64,
-	authenticatedRateLimit int64,
-	rateLimitWindow time.Duration) *Handlers {
+	cfg HandlerConfig) *Handlers {
 	return &Handlers{
 		loginExecutor:          loginExecutor,
 		createTicketExecutor:   createTicketExecutor,
 		updateTicketExecutor:   updateTicketExecutor,
 		getTicketExecutor:      getTicketExecutor,
 		listTicketsExecutor:    listTicketsExecutor,
-		publicRateLimit:        publicRateLimit,
-		authenticatedRateLimit: authenticatedRateLimit,
-		rateLimitWindow:        rateLimitWindow,
+		publicRateLimit:        cfg.PublicRateLimit,
+		authenticatedRateLimit: cfg.AuthenticatedRateLimit,
+		rateLimitWindow:        cfg.RateLimitWindow,
 		ingestDocumentService:  ingestDocumentService,
 		listDocumentsExecutor:  listDocumentsService,
 	}
@@ -201,10 +205,8 @@ func (h *Handlers) GetTicket(w http.ResponseWriter, r *http.Request, ticketID op
 	}
 
 	ticket, err := h.getTicketExecutor.Execute(r.Context(), query.GetTicketQuery{
-		TicketID:   ticketID,
-		Principal:  principal,
-		Resource:   "tickets",
-		ActionName: "read",
+		TicketID:  ticketID,
+		Principal: principal,
 	})
 	if err != nil {
 		switch {

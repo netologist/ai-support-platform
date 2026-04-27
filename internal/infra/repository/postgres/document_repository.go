@@ -73,6 +73,10 @@ func (r DocumentRepository) ListDocumentsByTenant(ctx context.Context, tenantID 
 	return docs, nil
 }
 
+func (r DocumentRepository) DeleteDocument(ctx context.Context, id uuid.UUID) error {
+	return r.queries.DeleteDocument(ctx, toPGUUID(id))
+}
+
 func mapDocument(row generated.KnowledgeDocument) (entity.KnowledgeDocument, error) {
 	id, err := toDomainUUID(row.ID)
 	if err != nil {

@@ -30,7 +30,7 @@ func TestRelay_FlushOnce(t *testing.T) {
 					{ID: eventID, AggregateID: aggID, AggregateType: "ticket", EventType: "ticket.created", Payload: []byte(`{}`), CreatedAt: time.Now()},
 				}, nil)
 				pub.EXPECT().PublishJSON(mock.Anything, "tickets", aggID.String(), mock.Anything).Return(nil)
-				repo.EXPECT().MarkEventSent(mock.Anything, eventID.String()).Return(nil)
+				repo.EXPECT().MarkEventSent(mock.Anything, eventID).Return(nil)
 			},
 		},
 		{

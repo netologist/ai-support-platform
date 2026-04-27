@@ -14,4 +14,6 @@ type OutboxEvent struct {
 	Payload       []byte // JSON
 	CreatedAt     time.Time
 	SentAt        *time.Time
+	AttemptCount  int       // tracks failed publish attempts
+	FailedAt      *time.Time // timestamp of last failure
 }
