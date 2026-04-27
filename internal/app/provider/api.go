@@ -18,6 +18,7 @@ import (
 	messagingkafka "github.com/netologist/ai-support-platform/internal/infra/messaging/kafka"
 	postgresrepo "github.com/netologist/ai-support-platform/internal/infra/repository/postgres"
 	"github.com/netologist/ai-support-platform/internal/infra/repository/sqlc"
+	transportgraphql "github.com/netologist/ai-support-platform/internal/transport/graphql"
 	transporthttp "github.com/netologist/ai-support-platform/internal/transport/http"
 	"github.com/redis/go-redis/v9"
 )
@@ -161,6 +162,17 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 	)
 
 	// -------------------------
+	// GraphQL
+	// -------------------------
+	graphQLHandler := transportgraphql.NewHandler(transportgraphql.Dependencies{
+		GetTicketService:      getTicketService,
+		ListTicketsService:    listTicketService,
+		ListDocumentsService:  listDocumentsService,
+		// SemanticSearchService: semanticSearchService,
+		// SuggestReplyService:   suggestReplyService,
+	})
+
+	// -------------------------
 	// HTTP
 	// -------------------------
 	router := transporthttp.NewRouter(transporthttp.Dependencies{
@@ -177,6 +189,7 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 		PublicRateLimit:        config.PublicRateLimit,
 		AuthenticatedRateLimit: config.AuthenticatedRateLimit,
 		RateLimitWindow:        config.RateLimitWindow,
+        GraphQLHandler:         graphQLHandler,
 	})
 
 	// -------------------------

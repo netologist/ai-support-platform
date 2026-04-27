@@ -21,6 +21,7 @@ tool (
 )
 
 require (
+	github.com/99designs/gqlgen v0.17.89
 	github.com/casbin/casbin/v2 v2.135.0
 	github.com/cloudwego/eino v0.8.11
 	github.com/cloudwego/eino-ext/components/embedding/gemini v0.0.0-20260424065505-3b3b8b5db0d0
@@ -39,6 +40,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/http-swagger/v2 v2.0.2
 	github.com/twmb/franz-go v1.21.0
+	github.com/vektah/gqlparser/v2 v2.5.32
 	golang.org/x/crypto v0.50.0
 	google.golang.org/genai v1.54.0
 )
@@ -76,7 +78,6 @@ require (
 	dario.cat/mergo v1.0.2 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/4meepo/tagalign v1.4.2 // indirect
-	github.com/99designs/gqlgen v0.17.89 // indirect
 	github.com/Abirdcfly/dupword v0.1.3 // indirect
 	github.com/Antonboom/errname v1.0.0 // indirect
 	github.com/Antonboom/nilnil v1.0.1 // indirect
@@ -469,7 +470,6 @@ require (
 	github.com/uudashr/gocognit v1.2.0 // indirect
 	github.com/uudashr/iface v1.3.1 // indirect
 	github.com/vbatts/tar-split v0.12.2 // indirect
-	github.com/vektah/gqlparser/v2 v2.5.32 // indirect
 	github.com/vektra/mockery/v2 v2.53.6 // indirect
 	github.com/vertica/vertica-sql-go v1.3.5 // indirect
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect

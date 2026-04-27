@@ -1,0 +1,39 @@
+type Query {
+  ticket(id: ID!): Ticket
+  tickets: [Ticket!]!
+  documents: [Document!]!
+  suggestReply(ticketId: ID!): SuggestReplyResult!
+  searchDocuments(query: String!, limit: Int): [DocumentChunk!]!
+}
+
+type Ticket {
+  id: ID!
+  tenantId: ID!
+  subject: String!
+  status: String!
+  createdByUserId: ID!
+  assignedToUserId: ID
+  createdAt: String!
+}
+
+type Document {
+  id: ID!
+  tenantId: ID!
+  title: String!
+  sourceUri: String!
+  createdByUserId: ID!
+  createdAt: String!
+}
+
+type DocumentChunk {
+  id: ID!
+  documentId: ID!
+  chunkIndex: Int!
+  content: String!
+  embeddingModel: String!
+}
+
+type SuggestReplyResult {
+  suggestedReply: String!
+  sources: [DocumentChunk!]!
+}

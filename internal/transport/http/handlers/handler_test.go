@@ -24,6 +24,7 @@ import (
 	mockexec "github.com/netologist/ai-support-platform/internal/mocks/executor"
 	mockrepo "github.com/netologist/ai-support-platform/internal/mocks/repository"
 	mocksvc "github.com/netologist/ai-support-platform/internal/mocks/service"
+	"github.com/netologist/ai-support-platform/internal/transport"
 	"github.com/netologist/ai-support-platform/internal/transport/http/handlers"
 )
 
@@ -62,7 +63,7 @@ func loginRequest(t *testing.T, body any) *http.Request {
 }
 
 func requestWithPrincipal(req *http.Request, principal entity.Principal) *http.Request {
-	return req.WithContext(handlers.WithPrincipal(req.Context(), principal))
+	return req.WithContext(transport.WithPrincipal(req.Context(), principal))
 }
 
 func ticketRequest(t *testing.T, method, path string, body any) *http.Request {
@@ -134,6 +135,9 @@ func TestLogin(t *testing.T) {
 			},
 			setupMocks: func(repo *mockrepo.MockAuthRepository, verifier *mocksvc.MockPasswordVerifier, issuer *mocksvc.MockTokenIssuer, auditLogger *mocksvc.MockAuditLogger) {
 				repo.EXPECT().FindUserByEmail(mock.Anything, "nobody@example.com").Return(entity.User{}, repository.ErrNotFound)
+				auditLogger.EXPECT().Record(mock.Anything, mock.MatchedBy(func(log entity.AuditLog) bool {
+					return log.Outcome == "user_not_found" && log.EventType == "auth.login"
+				})).Return(nil)
 			},
 			wantStatus: http.StatusUnauthorized,
 			wantBody:   "Unauthorized",
@@ -146,6 +150,9 @@ func TestLogin(t *testing.T) {
 			setupMocks: func(repo *mockrepo.MockAuthRepository, verifier *mocksvc.MockPasswordVerifier, issuer *mocksvc.MockTokenIssuer, auditLogger *mocksvc.MockAuditLogger) {
 				repo.EXPECT().FindUserByEmail(mock.Anything, "user@example.com").Return(fixedUser, nil)
 				verifier.EXPECT().Verify(fixedUser.PasswordHash, "wrong").Return(apperrors.ErrInvalidCredentials)
+				auditLogger.EXPECT().Record(mock.Anything, mock.MatchedBy(func(log entity.AuditLog) bool {
+					return log.Outcome == "invalid_password" && log.EventType == "auth.login"
+				})).Return(nil)
 			},
 			wantStatus: http.StatusUnauthorized,
 			wantBody:   "Unauthorized",

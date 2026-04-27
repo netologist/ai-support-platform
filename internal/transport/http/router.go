@@ -20,6 +20,7 @@ import (
 
 	"github.com/netologist/ai-support-platform/internal/app/executor"
 	"github.com/netologist/ai-support-platform/internal/domain/service"
+	"github.com/netologist/ai-support-platform/internal/transport"
 	"github.com/netologist/ai-support-platform/internal/transport/http/handlers"
 )
 
@@ -37,6 +38,7 @@ type Dependencies struct {
 	PublicRateLimit        int64
 	AuthenticatedRateLimit int64
 	RateLimitWindow        time.Duration
+    GraphQLHandler         http.Handler
 }
 
 func NewRouter(dependencies Dependencies) http.Handler {
@@ -59,6 +61,19 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(swagger)
 	})
+
+	if dependencies.GraphQLHandler != nil {
+		router.Group(func(router chi.Router) {
+			router.Use(rateLimitMiddleware(
+				dependencies.RateLimiter,
+				dependencies.PublicRateLimit,
+				dependencies.AuthenticatedRateLimit,
+				dependencies.RateLimitWindow,
+			))
+			router.Use(authenticatedMiddlewareForGraphql(dependencies))
+			router.Post("/graphql", dependencies.GraphQLHandler.ServeHTTP)
+		})
+	}
 
 	router.Group(func(r chi.Router) {
 		r.Use(nethttpmiddleware.OapiRequestValidatorWithOptions(swagger, &nethttpmiddleware.Options{
@@ -109,7 +124,7 @@ func authorizationGuardMiddleware(authorizer service.Authorizer) handlers.Middle
 				return
 			}
 
-			principal, ok := handlers.PrincipalFromContext(r.Context())
+			principal, ok := transport.PrincipalFromContext(r.Context())
 			if !ok {
 				writeUnauthorized(w, r)
 				return
@@ -154,6 +169,28 @@ func routePermission(method string, requestPath string) (requiredPermission, boo
 
 var errUnauthorized = errors.New("unauthorized")
 
+func authenticatedMiddlewareForGraphql(dependencies Dependencies) handlers.MiddlewareFunc {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            if dependencies.TokenVerifier == nil {
+                writeUnauthorized(w, r)
+                return
+            }
+            token, err := bearerTokenFromAuthorizationHeader(r.Header.Get("Authorization"))
+            if err != nil {
+                writeUnauthorized(w, r)
+                return
+            }
+            principal, err := dependencies.TokenVerifier.Verify(token)
+            if err != nil {
+                writeUnauthorized(w, r)
+                return
+            }
+            dependencies.GraphQLHandler.ServeHTTP(w, r.WithContext(transport.WithPrincipal(r.Context(), principal)))
+        })
+    }
+}
+
 func authenticatedMiddleware(tokenVerifier service.TokenVerifier) handlers.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +216,7 @@ func authenticatedMiddleware(tokenVerifier service.TokenVerifier) handlers.Middl
 				return
 			}
 
-			next.ServeHTTP(w, r.WithContext(handlers.WithPrincipal(r.Context(), principal)))
+			next.ServeHTTP(w, r.WithContext(transport.WithPrincipal(r.Context(), principal)))
 		})
 	}
 }
@@ -248,7 +285,7 @@ func buildRateLimitKeyAndLimit(
 ) (string, int64) {
 	route := normalizeRoute(r.Method, r.URL.Path)
 
-	principal, ok := handlers.PrincipalFromContext(r.Context())
+	principal, ok := transport.PrincipalFromContext(r.Context())
 	if ok {
 		key := fmt.Sprintf("auth:%s:%s:%s:%s",
 			principal.TenantID.String(),

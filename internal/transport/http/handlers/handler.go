@@ -15,6 +15,7 @@ import (
 	"github.com/netologist/ai-support-platform/internal/app/executor"
 	"github.com/netologist/ai-support-platform/internal/app/query"
 	"github.com/netologist/ai-support-platform/internal/domain/entity"
+	"github.com/netologist/ai-support-platform/internal/transport"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -98,7 +99,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) CreateTicket(w http.ResponseWriter, r *http.Request) {
-	principal, ok := principalFromContext(r.Context())
+	principal, ok := transport.PrincipalFromContext(r.Context())
 	if !ok {
 		writeProblem(w, r, http.StatusUnauthorized, "Unauthorized", "missing authenticated principal", nil)
 		return
@@ -131,7 +132,7 @@ func (h *Handlers) CreateTicket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) UpdateTicket(w http.ResponseWriter, r *http.Request, ticketID openapi_types.UUID) {
-	principal, ok := principalFromContext(r.Context())
+	principal, ok := transport.PrincipalFromContext(r.Context())
 	if !ok {
 		writeProblem(w, r, http.StatusUnauthorized, "Unauthorized", "missing authenticated principal", nil)
 		return
@@ -187,7 +188,7 @@ func (h *Handlers) UpdateTicket(w http.ResponseWriter, r *http.Request, ticketID
 }
 
 func (h *Handlers) GetTicket(w http.ResponseWriter, r *http.Request, ticketID openapi_types.UUID) {
-	principal, ok := principalFromContext(r.Context())
+	principal, ok := transport.PrincipalFromContext(r.Context())
 	if !ok {
 		writeProblem(w, r, http.StatusUnauthorized, "Unauthorized", "missing authenticated principal", nil)
 		return
@@ -222,7 +223,7 @@ func (h *Handlers) GetTicket(w http.ResponseWriter, r *http.Request, ticketID op
 }
 
 func (h *Handlers) ListTickets(w http.ResponseWriter, r *http.Request) {
-	principal, ok := principalFromContext(r.Context())
+	principal, ok := transport.PrincipalFromContext(r.Context())
 	if !ok {
 		writeProblem(w, r, http.StatusUnauthorized, "Unauthorized", "missing authenticated principal", nil)
 		return
@@ -248,7 +249,7 @@ func (h *Handlers) ListTickets(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) ListDocuments(w http.ResponseWriter, r *http.Request) {
-	principal, ok := principalFromContext(r.Context())
+	principal, ok := transport.PrincipalFromContext(r.Context())
 	if !ok {
 		writeProblem(w, r, http.StatusUnauthorized, "Unauthorized", "missing authenticated principal", nil)
 		return
@@ -275,7 +276,7 @@ func (h *Handlers) ListDocuments(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) IngestDocument(w http.ResponseWriter, r *http.Request) {
-	principal, ok := principalFromContext(r.Context())
+	principal, ok := transport.PrincipalFromContext(r.Context())
 	if !ok {
 		writeProblem(w, r, http.StatusUnauthorized, "Unauthorized", "missing authenticated principal", nil)
 		return

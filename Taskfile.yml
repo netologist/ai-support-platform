@@ -121,3 +121,4 @@ tasks:
     cmds:
       - go tool sqlc generate
       - go tool oapi-codegen -config openapi/config.yaml openapi/spec.yaml
+      - go tool gqlgen generate
