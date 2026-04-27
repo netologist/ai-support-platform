@@ -2,11 +2,9 @@ package command
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -100,18 +98,16 @@ func (svc UpdateTicketService) Execute(ctx context.Context, command UpdateTicket
 
 	// Write outbox event for ticket.updated
 	if svc.outbox != nil {
-		payload, _ := json.Marshal(map[string]any{
+		event, err := entity.NewOutboxEvent("ticket", updatedTicket.ID, "ticket.updated", map[string]any{
 			"event_type": "ticket.updated",
 			"ticket":     updatedTicket,
 		})
-		if err := svc.outbox.InsertEvent(ctx, &entity.OutboxEvent{
-			ID:            uuid.New(),
-			AggregateType: "ticket",
-			AggregateID:   updatedTicket.ID,
-			EventType:     "ticket.updated",
-			Payload:       payload,
-			CreatedAt:     time.Now().UTC(),
-		}); err != nil {
+		if err != nil {
+			slog.Error("outbox event build failed after ticket update",
+				slog.String("ticket_id", updatedTicket.ID.String()),
+				slog.Any("error", err),
+			)
+		} else if err := svc.outbox.InsertEvent(ctx, event); err != nil {
 			slog.Error("outbox insert failed after ticket update",
 				slog.String("ticket_id", updatedTicket.ID.String()),
 				slog.Any("error", err),

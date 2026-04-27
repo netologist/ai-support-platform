@@ -34,8 +34,8 @@ func NewLoginService(
 	passwordVerifier service.PasswordVerifier,
 	tokenIssuer service.TokenIssuer,
 	auditLogger service.AuditLogger,
-) *LoginService {
-	return &LoginService{
+) LoginService {
+	return LoginService{
 		authRepository:   authRepository,
 		passwordVerifier: passwordVerifier,
 		tokenIssuer:      tokenIssuer,
@@ -43,7 +43,7 @@ func NewLoginService(
 	}
 }
 
-func (s *LoginService) Execute(ctx context.Context, command LoginCommand) (LoginResult, error) {
+func (s LoginService) Execute(ctx context.Context, command LoginCommand) (LoginResult, error) {
 	user, err := s.authRepository.FindUserByEmail(ctx, command.Email)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -78,7 +78,16 @@ func (s *LoginService) Execute(ctx context.Context, command LoginCommand) (Login
 	membership, err := s.authRepository.FindMembership(ctx, user.ID, command.TenantID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			s.recordAudit(ctx, entity.AuditLog{EventType: "auth.login", Action: "login", Outcome: "invalid_membership", TenantID: &command.TenantID, UserID: &user.ID, Resource: "auth", Metadata: map[string]any{"email": command.Email}})
+			s.recordAudit(ctx, entity.AuditLog{
+				EventType: "auth.login",
+				Action:    "login",
+				Outcome:   "invalid_membership",
+				TenantID:  &command.TenantID,
+				UserID:    &user.ID,
+				Resource:  "auth",
+				// Omit email from metadata to avoid leaking which addresses are registered.
+				Metadata: map[string]any{"reason": "invalid_membership"},
+			})
 			return LoginResult{}, apperrors.ErrInvalidCredentials
 		}
 

@@ -2,6 +2,7 @@ package audit
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,7 +36,12 @@ func (logger Logger) Record(ctx context.Context, entry entity.AuditLog) error {
 
 	if logger.publisher != nil && logger.topic != "" {
 		if err := logger.publisher.PublishJSON(ctx, logger.topic, entry.ID.String(), entry); err != nil {
-			return err
+			// Audit record is safely stored in DB; log and continue rather than
+			// returning an error that would mask the original operation's result.
+			slog.Error("audit logger kafka publish failed",
+				slog.String("audit_id", entry.ID.String()),
+				slog.Any("error", err),
+			)
 		}
 	}
 

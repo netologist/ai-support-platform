@@ -81,10 +81,11 @@ func TestPool_StartAndStop(t *testing.T) {
 	pool.Start(ctx)
 
 	executed := make(chan struct{}, 1)
-	pool.Submit(func(ctx context.Context) error {
+	err := pool.Submit(ctx, func(ctx context.Context) error {
 		executed <- struct{}{}
 		return nil
 	})
+	require.NoError(t, err)
 
 	<-executed
 	pool.Stop()

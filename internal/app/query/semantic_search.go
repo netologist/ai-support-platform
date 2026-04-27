@@ -51,6 +51,9 @@ func (svc SemanticSearchService) Execute(ctx context.Context, q SemanticSearchQu
 	if limit <= 0 {
 		limit = 5
 	}
+	if limit > 100 {
+		limit = 100
+	}
 
 	embedding, err := svc.embedder.Embed(ctx, q.Text)
 	if err != nil {

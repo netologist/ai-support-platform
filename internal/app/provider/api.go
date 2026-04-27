@@ -6,21 +6,16 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/netologist/ai-support-platform/internal/app/command"
 	"github.com/netologist/ai-support-platform/internal/app/query"
-	infraai "github.com/netologist/ai-support-platform/internal/infra/ai"
 	"github.com/netologist/ai-support-platform/internal/infra/ai/chunking"
 	infraaudit "github.com/netologist/ai-support-platform/internal/infra/audit"
 	infraauth "github.com/netologist/ai-support-platform/internal/infra/auth"
 	infracache "github.com/netologist/ai-support-platform/internal/infra/cache"
-
-	messagingkafka "github.com/netologist/ai-support-platform/internal/infra/messaging/kafka"
 	postgresrepo "github.com/netologist/ai-support-platform/internal/infra/repository/postgres"
 	"github.com/netologist/ai-support-platform/internal/infra/repository/sqlc"
 	transportgraphql "github.com/netologist/ai-support-platform/internal/transport/graphql"
 	transporthttp "github.com/netologist/ai-support-platform/internal/transport/http"
-	"github.com/redis/go-redis/v9"
 )
 
 type APIRuntime struct {
@@ -31,54 +26,29 @@ type APIRuntime struct {
 func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 	closer := &closerStack{}
 
-	// -------------------------
-	// DB
-	// -------------------------
-	db, err := pgxpool.New(ctx, config.DatabaseURL)
-	if err != nil {
-		return APIRuntime{}, fmt.Errorf("connect postgres: %w", err)
-	}
-	closer.Add(db.Close)
-
-	// -------------------------
-	// Redis
-	// -------------------------
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     config.RedisAddress,
-		Password: config.RedisPassword,
-		DB:       config.RedisDatabase,
-	})
-
-	if err := redisClient.Ping(ctx).Err(); err != nil {
-		closer.Close()
-		return APIRuntime{}, fmt.Errorf("connect redis: %w", err)
-	}
-	closer.AddWithError(redisClient.Close)
-
-	// -------------------------
-	// Kafka
-	// -------------------------
-	kafkaPublisher, err := messagingkafka.NewPublisher(config.KafkaBrokers)
+	db, err := buildDB(ctx, config, closer)
 	if err != nil {
 		closer.Close()
-		return APIRuntime{}, fmt.Errorf("build kafka publisher: %w", err)
+		return APIRuntime{}, err
 	}
-	closer.Add(kafkaPublisher.Close)
 
-	// -------------------------
-	// AI
-	// -------------------------
-	aiProviders, err := infraai.NewProviders(ctx, infraai.Config{
-		Provider:       config.AIProvider,
-		Model:          config.AIModel,
-		EmbeddingModel: config.AIEmbeddingModel,
-		APIKey:         config.AIAPIKey,
-	})
+	redisClient, err := buildRedis(ctx, config, closer)
 	if err != nil {
 		closer.Close()
-		return APIRuntime{}, fmt.Errorf("build AI provider: %w", err)
+		return APIRuntime{}, err
 	}
-	closer.AddWithError(aiProviders.Close)
+
+	kafkaPublisher, err := buildKafkaPublisher(config, closer)
+	if err != nil {
+		closer.Close()
+		return APIRuntime{}, err
+	}
+
+	aiProviders, err := buildAI(ctx, config, closer)
+	if err != nil {
+		closer.Close()
+		return APIRuntime{}, err
+	}
 
 	// -------------------------
 	// Repositories
@@ -184,7 +154,6 @@ func NewAPIRuntime(ctx context.Context, config Config) (APIRuntime, error) {
 		IngestDocumentExecutor: ingestDocumentService,
 		ListDocumentsExecutor:  listDocumentsService,
 		TokenVerifier:          tokenManager,
-		Authorizer:             authorizer,
 		RateLimiter:            redisRateLimiter,
 		PublicRateLimit:        config.PublicRateLimit,
 		AuthenticatedRateLimit: config.AuthenticatedRateLimit,

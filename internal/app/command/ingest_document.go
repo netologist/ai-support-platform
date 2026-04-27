@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -81,6 +82,10 @@ func (svc IngestDocumentService) Execute(ctx context.Context, cmd IngestDocument
 		embedding, err := svc.embedder.Embed(ctx, text)
 		if err != nil {
 			return entity.KnowledgeDocument{}, err
+		}
+
+		if len(embedding) != entity.EmbeddingDimension {
+			return entity.KnowledgeDocument{}, fmt.Errorf("embedding dimension mismatch: got %d, want %d", len(embedding), entity.EmbeddingDimension)
 		}
 
 		domainChunks = append(domainChunks, entity.DocumentChunk{

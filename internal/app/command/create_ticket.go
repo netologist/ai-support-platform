@@ -2,7 +2,6 @@ package command
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"time"
@@ -70,18 +69,16 @@ func (svc CreateTicketService) Execute(ctx context.Context, command CreateTicket
 
 	// Write outbox event for ticket.created
 	if svc.outbox != nil {
-		payload, _ := json.Marshal(map[string]any{
+		event, err := entity.NewOutboxEvent("ticket", createdTicket.ID, "ticket.created", map[string]any{
 			"event_type": "ticket.created",
 			"ticket":     createdTicket,
 		})
-		if err := svc.outbox.InsertEvent(ctx, &entity.OutboxEvent{
-			ID:            uuid.New(),
-			AggregateType: "ticket",
-			AggregateID:   createdTicket.ID,
-			EventType:     "ticket.created",
-			Payload:       payload,
-			CreatedAt:     now,
-		}); err != nil {
+		if err != nil {
+			slog.Error("outbox event build failed after ticket create",
+				slog.String("ticket_id", createdTicket.ID.String()),
+				slog.Any("error", err),
+			)
+		} else if err := svc.outbox.InsertEvent(ctx, event); err != nil {
 			slog.Error("outbox insert failed after ticket create",
 				slog.String("ticket_id", createdTicket.ID.String()),
 				slog.Any("error", err),

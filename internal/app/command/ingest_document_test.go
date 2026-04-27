@@ -45,8 +45,8 @@ func TestIngestDocumentService_Execute(t *testing.T) {
 					Return(entity.KnowledgeDocument{ID: uuid.New(), TenantID: principal.TenantID, Title: "FAQ"}, nil)
 				chunker.EXPECT().Chunk(mock.Anything, "First paragraph.\n\nSecond paragraph.", 512).
 					Return([]string{"First paragraph.", "Second paragraph."}, nil)
-				embedder.EXPECT().Embed(mock.Anything, "First paragraph.").Return([]float32{0.1, 0.2}, nil)
-				embedder.EXPECT().Embed(mock.Anything, "Second paragraph.").Return([]float32{0.3, 0.4}, nil)
+				embedder.EXPECT().Embed(mock.Anything, "First paragraph.").Return(make([]float32, 1536), nil)
+				embedder.EXPECT().Embed(mock.Anything, "Second paragraph.").Return(make([]float32, 1536), nil)
 				embedder.EXPECT().ModelName().Return("fake-model")
 				chunkRepo.EXPECT().InsertChunks(mock.Anything, mock.AnythingOfType("[]entity.DocumentChunk")).Return(nil)
 				audit.EXPECT().Record(mock.Anything, mock.AnythingOfType("entity.AuditLog")).Return(nil)
@@ -63,6 +63,25 @@ func TestIngestDocumentService_Execute(t *testing.T) {
 				auth.EXPECT().Authorize(mock.Anything, principal, "documents", "create").Return(service.ErrPermissionDenied)
 			},
 			wantErr: apperrors.ErrForbidden,
+		},
+		{
+			name: "compensating delete when InsertChunks fails",
+			cmd: command.IngestDocumentCommand{
+				Principal: principal,
+				Title:     "FAQ",
+				Content:   "Paragraph one.",
+			},
+			setupMock: func(auth *mockservice.MockAuthorizer, docRepo *mockrepository.MockDocumentRepository, chunkRepo *mockrepository.MockChunkRepository, chunker *mockservice.MockChunker, embedder *mockservice.MockEmbeddingProvider, audit *mockservice.MockAuditLogger) {
+				createdDoc := entity.KnowledgeDocument{ID: uuid.New(), TenantID: principal.TenantID, Title: "FAQ"}
+				auth.EXPECT().Authorize(mock.Anything, principal, "documents", "create").Return(nil)
+				docRepo.EXPECT().CreateDocument(mock.Anything, mock.AnythingOfType("entity.KnowledgeDocument")).Return(createdDoc, nil)
+				chunker.EXPECT().Chunk(mock.Anything, "Paragraph one.", 512).Return([]string{"Paragraph one."}, nil)
+				embedder.EXPECT().Embed(mock.Anything, "Paragraph one.").Return(make([]float32, 1536), nil)
+				embedder.EXPECT().ModelName().Return("fake-model")
+				chunkRepo.EXPECT().InsertChunks(mock.Anything, mock.AnythingOfType("[]entity.DocumentChunk")).Return(assert.AnError)
+				docRepo.EXPECT().DeleteDocument(mock.Anything, createdDoc.ID).Return(nil)
+			},
+			wantErr: assert.AnError,
 		},
 	}
 

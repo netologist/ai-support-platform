@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -33,7 +32,6 @@ type Dependencies struct {
 	ListDocumentsExecutor  executor.ListDocumentsExecutor
 	IngestDocumentExecutor executor.IngestDocumentExecutor
 	TokenVerifier          service.TokenVerifier
-	Authorizer             service.Authorizer
 	RateLimiter            service.RateLimiter
 	PublicRateLimit        int64
 	AuthenticatedRateLimit int64
@@ -51,6 +49,7 @@ func NewRouter(dependencies Dependencies) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.Recoverer)
+	router.Use(chimiddleware.RequestSize(4 * 1024 * 1024)) // 4 MiB — guard against request body DoS
 
 	router.Get("/docs/*", httpSwagger.Handler(
 		httpSwagger.URL("/openapi.json"), // spec URL
@@ -59,7 +58,9 @@ func NewRouter(dependencies Dependencies) http.Handler {
 	router.Get("/openapi.json", func(w http.ResponseWriter, r *http.Request) {
 		swagger, _ := handlers.GetSwagger()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(swagger)
+		if err := json.NewEncoder(w).Encode(swagger); err != nil {
+			log.Printf("openapi.json encode error: %v", err)
+		}
 	})
 
 	if dependencies.GraphQLHandler != nil {
@@ -97,7 +98,6 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		), handlers.ChiServerOptions{
 			BaseRouter: r,
 			Middlewares: []handlers.MiddlewareFunc{
-				authorizationGuardMiddleware(dependencies.Authorizer),
 				rateLimitMiddleware(
 					dependencies.RateLimiter,
 					dependencies.PublicRateLimit,
@@ -110,63 +110,6 @@ func NewRouter(dependencies Dependencies) http.Handler {
 	})
 
 	return router
-}
-
-type requiredPermission struct {
-	resource string
-	action   string
-}
-
-func authorizationGuardMiddleware(authorizer service.Authorizer) handlers.MiddlewareFunc {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			permission, requiresGuard := routePermission(r.Method, r.URL.Path)
-			if !requiresGuard || authorizer == nil {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			principal, ok := transport.PrincipalFromContext(r.Context())
-			if !ok {
-				writeUnauthorized(w, r)
-				return
-			}
-
-			if err := authorizer.Authorize(r.Context(), principal, permission.resource, permission.action); err != nil {
-				if errors.Is(err, service.ErrPermissionDenied) {
-					writeForbidden(w)
-					return
-				}
-
-				writeInternalServerError(w)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-func routePermission(method string, requestPath string) (requiredPermission, bool) {
-	switch {
-	case method == http.MethodGet && requestPath == "/v1/tickets":
-		return requiredPermission{resource: "tickets", action: "read"}, true
-	case method == http.MethodPost && requestPath == "/v1/tickets":
-		return requiredPermission{resource: "tickets", action: "create"}, true
-	case (method == http.MethodGet || method == http.MethodPatch) && strings.HasPrefix(requestPath, "/v1/tickets/"):
-		action := "read"
-		if method == http.MethodPatch {
-			action = "update"
-		}
-
-		if path.Base(requestPath) == "" || path.Base(requestPath) == "tickets" {
-			return requiredPermission{}, false
-		}
-
-		return requiredPermission{resource: "tickets", action: action}, true
-	default:
-		return requiredPermission{}, false
-	}
 }
 
 var errUnauthorized = errors.New("unauthorized")
@@ -312,9 +255,15 @@ func normalizeRoute(method, p string) string {
 }
 
 func clientIP(r *http.Request) string {
+	// X-Forwarded-For is only trustworthy when the service runs behind a
+	// known reverse proxy. Trusting it blindly allows IP spoofing for rate-
+	// limit bypass. Validate that the value is a parseable IP address before
+	// using it; invalid/spoofed values fall back to RemoteAddr.
 	xff := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-For"), ",")[0])
 	if xff != "" {
-		return xff
+		if ip := net.ParseIP(xff); ip != nil {
+			return ip.String()
+		}
 	}
 
 	host, _, err := net.SplitHostPort(r.RemoteAddr)

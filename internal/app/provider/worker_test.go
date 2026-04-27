@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,6 +19,12 @@ func TestNewWorkerRuntime_InvalidDatabaseURL(t *testing.T) {
 
 func TestNewWorkerRuntime_ValidURLBuildsRuntime(t *testing.T) {
 	t.Parallel()
+
+	if conn, err := net.Dial("tcp", "localhost:6379"); err != nil {
+		t.Skip("Redis not available, skipping integration test")
+	} else {
+		conn.Close()
+	}
 
 	// pgxpool.New and kafka clients are lazy — a valid-format URL succeeds even
 	// without a running DB or broker. The runtime should be constructed without error.

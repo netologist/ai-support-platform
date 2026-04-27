@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
-
 	"github.com/netologist/ai-support-platform/internal/infra/cache/idempotency"
 	messagingkafka "github.com/netologist/ai-support-platform/internal/infra/messaging/kafka"
 	"github.com/netologist/ai-support-platform/internal/infra/messaging/outbox"
@@ -25,25 +22,23 @@ type WorkerRuntime struct {
 func NewWorkerRuntime(ctx context.Context, config Config) (WorkerRuntime, error) {
 	closer := &closerStack{}
 
-	databasePool, err := pgxpool.New(ctx, config.DatabaseURL)
+	databasePool, err := buildDB(ctx, config, closer)
 	if err != nil {
-		return WorkerRuntime{}, fmt.Errorf("connect postgres: %w", err)
+		closer.Close()
+		return WorkerRuntime{}, err
 	}
-	closer.Add(databasePool.Close)
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     config.RedisAddress,
-		Password: config.RedisPassword,
-		DB:       config.RedisDatabase,
-	})
-	closer.AddWithError(redisClient.Close)
-
-	kafkaPublisher, err := messagingkafka.NewPublisher(config.KafkaBrokers)
+	redisClient, err := buildRedis(ctx, config, closer)
 	if err != nil {
-		_ = closer.Close()
-		return WorkerRuntime{}, fmt.Errorf("build kafka publisher: %w", err)
+		closer.Close()
+		return WorkerRuntime{}, err
 	}
-	closer.Add(kafkaPublisher.Close)
+
+	kafkaPublisher, err := buildKafkaPublisher(config, closer)
+	if err != nil {
+		closer.Close()
+		return WorkerRuntime{}, err
+	}
 
 	queries := generated.New(databasePool)
 	outboxRepo := postgresrepo.NewOutboxRepository(queries)
@@ -55,7 +50,7 @@ func NewWorkerRuntime(ctx context.Context, config Config) (WorkerRuntime, error)
 
 	consumer, err := messagingkafka.NewConsumer(config.KafkaBrokers, "worker-group", []string{config.KafkaTicketTopic})
 	if err != nil {
-		_ = closer.Close()
+		closer.Close()
 		return WorkerRuntime{}, fmt.Errorf("build kafka consumer: %w", err)
 	}
 	closer.Add(consumer.Close)

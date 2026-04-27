@@ -6,6 +6,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// EmbeddingDimension is the vector size expected by the pgvector column
+// defined in migrations/000005_documents.sql. If the embedding model changes,
+// update this constant AND create a new migration to ALTER the column.
+const EmbeddingDimension = 1536
+
 type KnowledgeDocument struct {
 	ID              uuid.UUID
 	TenantID        uuid.UUID

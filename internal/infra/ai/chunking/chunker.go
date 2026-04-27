@@ -17,7 +17,10 @@ func (c *SimpleChunker) Chunk(_ context.Context, content string, maxTokens int) 
 		maxTokens = 512
 	}
 
-	maxChars := maxTokens * 4
+	// Approximate rune budget: ~3 Unicode code points per token is conservative
+	// across Latin, Turkish, and other multi-byte scripts. For precise token
+	// counting, replace with a model-specific tokenizer such as tiktoken.
+	maxChars := maxTokens * 3
 
 	paragraphs := strings.Split(content, "\n\n")
 

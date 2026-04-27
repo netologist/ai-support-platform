@@ -65,19 +65,19 @@ func LoadConfig() (Config, error) {
 	}
 
 	config := Config{
-		HTTPAddress:            valueOrDefault(raw.HTTPAddress, ":8080"),
+		HTTPAddress:            raw.HTTPAddress,
 		DatabaseURL:            raw.DatabaseURL,
-		RedisAddress:           valueOrDefault(raw.RedisAddress, "localhost:6379"),
+		RedisAddress:           raw.RedisAddress,
 		RedisPassword:          raw.RedisPassword,
 		RedisDatabase:          raw.RedisDatabase,
-		AIProvider:             valueOrDefault(raw.AIProvider, "fake"),
-		AIModel:                valueOrDefault(raw.AIModel, "gemini-2.5-flash"),
-		AIEmbeddingModel:       valueOrDefault(raw.AIEmbeddingModel, "text-embedding-004"),
+		AIProvider:             raw.AIProvider,
+		AIModel:                raw.AIModel,
+		AIEmbeddingModel:       raw.AIEmbeddingModel,
 		AIAPIKey:               firstNonEmpty(raw.AIAPIKey, raw.GoogleAPIKey, raw.GeminiAPIKey),
 		KafkaBrokers:           valuesOrDefault(trimNonEmpty(raw.KafkaBrokers), []string{"localhost:9094"}),
-		KafkaAuditTopic:        valueOrDefault(raw.KafkaAuditTopic, "audit.logged.v1"),
-		KafkaTicketTopic:       valueOrDefault(raw.KafkaTicketTopic, "ticket.created.v1"),
-		JWTIssuer:              valueOrDefault(raw.JWTIssuer, "ai-support-platform"),
+		KafkaAuditTopic:        raw.KafkaAuditTopic,
+		KafkaTicketTopic:       raw.KafkaTicketTopic,
+		JWTIssuer:              raw.JWTIssuer,
 		JWTSecret:              raw.JWTSecret,
 		JWTTTL:                 raw.JWTTTL,
 		TicketCacheTTL:         raw.TicketCacheTTL,
@@ -123,14 +123,6 @@ func trimNonEmpty(values []string) []string {
 	}
 
 	return trimmed
-}
-
-func valueOrDefault(value string, fallback string) string {
-	if strings.TrimSpace(value) == "" {
-		return fallback
-	}
-
-	return value
 }
 
 func valuesOrDefault(values []string, fallback []string) []string {

@@ -9,9 +9,9 @@ import (
 func TestLoadConfig_DefaultsToFakeProvider(t *testing.T) {
 	t.Setenv("APP_DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ai_support_platform?sslmode=disable")
 	t.Setenv("APP_JWT_SECRET", "secret")
-	t.Setenv("APP_AI_PROVIDER", "")
-	t.Setenv("APP_AI_API_KEY", "")
 	t.Setenv("APP_AI_MODEL", "gemini-2.5-flash")
+	// Deliberately leave APP_AI_PROVIDER unset so the envconfig default ("fake") applies.
+	t.Setenv("APP_AI_API_KEY", "")
 	t.Setenv("GOOGLE_API_KEY", "")
 	t.Setenv("GEMINI_API_KEY", "")
 

@@ -46,8 +46,13 @@ func (p *Pool) Start(ctx context.Context) {
 	}
 }
 
-func (p *Pool) Submit(job Job) {
-	p.jobs <- job
+func (p *Pool) Submit(ctx context.Context, job Job) error {
+	select {
+	case p.jobs <- job:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (p *Pool) Stop() {
