@@ -50,6 +50,7 @@ func NewRouter(dependencies Dependencies) http.Handler {
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.Recoverer)
 	router.Use(chimiddleware.RequestSize(4 * 1024 * 1024)) // 4 MiB — guard against request body DoS
+	router.Use(securityHeadersMiddleware)
 
 	router.Get("/docs/*", httpSwagger.Handler(
 		httpSwagger.URL("/openapi.json"), // spec URL
@@ -318,5 +319,18 @@ func writeInternalServerError(w http.ResponseWriter) {
 		"title":  "Internal Server Error",
 		"status": http.StatusInternalServerError,
 		"detail": "unexpected error",
+	})
+}
+
+// securityHeadersMiddleware adds defensive HTTP response headers on every
+// request. These headers enable browser security features such as MIME-type
+// enforcement and framing protection for API consumers that render responses.
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		next.ServeHTTP(w, r)
 	})
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,7 +33,12 @@ func (cache RedisTicketCache) GetTicket(ctx context.Context, ticketID uuid.UUID)
 
 	var ticket entity.Ticket
 	if err := json.Unmarshal(payload, &ticket); err != nil {
-		return entity.Ticket{}, false, err
+		// Corrupted cache entry — treat as a miss so the caller falls back to DB.
+		slog.Warn("redis ticket cache: corrupted entry, treating as cache miss",
+			slog.String("ticket_id", ticketID.String()),
+			slog.Any("error", err),
+		)
+		return entity.Ticket{}, false, nil
 	}
 
 	return ticket, true, nil

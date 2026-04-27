@@ -26,11 +26,13 @@ func (h *TicketEventHandler) Handle(ctx context.Context, topic string, key []byt
 	}
 
 	idempotencyKey := fmt.Sprintf("%s:%s", topic, string(key))
-	processed, err := h.idempotency.IsProcessed(ctx, idempotencyKey)
+	// CheckAndMark is atomic (Redis SET NX): eliminates TOCTOU race between
+	// IsProcessed and MarkProcessed under concurrent consumers.
+	isNew, err := h.idempotency.CheckAndMark(ctx, idempotencyKey)
 	if err != nil {
-		return fmt.Errorf("idempotency check: %w", err)
+		return fmt.Errorf("idempotency check-and-mark: %w", err)
 	}
-	if processed {
+	if !isNew {
 		slog.Info("event already processed, skipping", slog.String("key", idempotencyKey))
 		return nil
 	}
@@ -46,9 +48,8 @@ func (h *TicketEventHandler) Handle(ctx context.Context, topic string, key []byt
 		slog.Warn("unknown event type", slog.String("event_type", envelope.EventType))
 	}
 
-	if err := h.idempotency.MarkProcessed(ctx, idempotencyKey); err != nil {
-		return fmt.Errorf("mark processed: %w", err)
-	}
+	// CheckAndMark already marked the event as processed atomically above.
+	// No separate MarkProcessed call needed.
 
 	return nil
 }

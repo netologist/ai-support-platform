@@ -96,6 +96,14 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("APP_JWT_SECRET is required")
 	}
 
+	if config.PublicRateLimit <= 0 {
+		return Config{}, fmt.Errorf("APP_PUBLIC_RATE_LIMIT must be > 0, got %d", config.PublicRateLimit)
+	}
+
+	if config.AuthenticatedRateLimit <= 0 {
+		return Config{}, fmt.Errorf("APP_AUTHENTICATED_RATE_LIMIT must be > 0, got %d", config.AuthenticatedRateLimit)
+	}
+
 	if (strings.EqualFold(config.AIProvider, "eino") || strings.EqualFold(config.AIProvider, "genkit")) && config.AIAPIKey == "" {
 		return Config{}, fmt.Errorf("APP_AI_API_KEY or GOOGLE_API_KEY is required when APP_AI_PROVIDER=eino")
 	}

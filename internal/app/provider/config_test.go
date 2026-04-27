@@ -62,3 +62,23 @@ func TestLoadConfig_TrimsKafkaBrokers(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"broker-1:9092", "broker-2:9092", "broker-3:9092"}, config.KafkaBrokers)
 }
+
+func TestLoadConfig_ZeroPublicRateLimitIsRejected(t *testing.T) {
+	t.Setenv("APP_DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ai_support_platform?sslmode=disable")
+	t.Setenv("APP_JWT_SECRET", "secret")
+	t.Setenv("APP_PUBLIC_RATE_LIMIT", "0")
+
+	_, err := LoadConfig()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "APP_PUBLIC_RATE_LIMIT")
+}
+
+func TestLoadConfig_ZeroAuthenticatedRateLimitIsRejected(t *testing.T) {
+	t.Setenv("APP_DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ai_support_platform?sslmode=disable")
+	t.Setenv("APP_JWT_SECRET", "secret")
+	t.Setenv("APP_AUTHENTICATED_RATE_LIMIT", "0")
+
+	_, err := LoadConfig()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "APP_AUTHENTICATED_RATE_LIMIT")
+}

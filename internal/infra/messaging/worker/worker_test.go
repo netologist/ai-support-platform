@@ -26,8 +26,8 @@ func TestTicketEventHandler_Handle(t *testing.T) {
 			key:   "ticket-123",
 			value: map[string]any{"event_type": "ticket.created"},
 			setupMock: func(m *mockworker.MockIdempotencyChecker) {
-				m.EXPECT().IsProcessed(context.Background(), "tickets:ticket-123").Return(false, nil)
-				m.EXPECT().MarkProcessed(context.Background(), "tickets:ticket-123").Return(nil)
+				// CheckAndMark returns true = key is new = not yet processed
+				m.EXPECT().CheckAndMark(context.Background(), "tickets:ticket-123").Return(true, nil)
 			},
 		},
 		{
@@ -35,7 +35,8 @@ func TestTicketEventHandler_Handle(t *testing.T) {
 			key:   "ticket-456",
 			value: map[string]any{"event_type": "ticket.updated"},
 			setupMock: func(m *mockworker.MockIdempotencyChecker) {
-				m.EXPECT().IsProcessed(context.Background(), "tickets:ticket-456").Return(true, nil)
+				// CheckAndMark returns false = key already existed = already processed
+				m.EXPECT().CheckAndMark(context.Background(), "tickets:ticket-456").Return(false, nil)
 			},
 		},
 		{

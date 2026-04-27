@@ -57,6 +57,7 @@ func TestHandler_ServeHTTP_TicketsAndDocuments(t *testing.T) {
 
 	body := bytes.NewBufferString(`{"query":"query Dashboard { tickets { id subject } documents { id title } }","variables":{}}`)
 	request := httptest.NewRequest(http.MethodPost, "/graphql", body)
+	request.Header.Set("Content-Type", "application/json")
 	request = request.WithContext(transport.WithPrincipal(request.Context(), principal))
 	response := httptest.NewRecorder()
 
@@ -114,6 +115,7 @@ func TestHandler_ServeHTTP_SearchDocumentsAndSuggestReply(t *testing.T) {
 
 	body := bytes.NewBufferString(`{"query":"query Search($query: String!, $limit: Int!, $ticketId: ID!) { searchDocuments(query: $query, limit: $limit) { id } suggestReply(ticketId: $ticketId) { suggestedReply } }","variables":{"query":"password reset","limit":2,"ticketId":"` + ticketID.String() + `"}}`)
 	request := httptest.NewRequest(http.MethodPost, "/graphql", body)
+	request.Header.Set("Content-Type", "application/json")
 	request = request.WithContext(transport.WithPrincipal(request.Context(), principal))
 	response := httptest.NewRecorder()
 
@@ -127,8 +129,8 @@ func TestHandler_ServeHTTP_SearchDocumentsAndSuggestReply(t *testing.T) {
 func TestHandler_ServeHTTP_RequiresPrincipal(t *testing.T) {
 	handler := NewHandler(Dependencies{})
 	request := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(`{"query":"query { tickets { id } }"}`))
+	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
-
 	handler.ServeHTTP(response, request)
 
 	require.Equal(t, http.StatusUnauthorized, response.Code)

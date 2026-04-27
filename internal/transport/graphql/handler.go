@@ -50,6 +50,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		writeGQLError(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
+		return
+	}
+
 	var req graphQLRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeGQLError(w, http.StatusBadRequest, "invalid request body")

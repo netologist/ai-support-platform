@@ -6,6 +6,11 @@ import (
 )
 
 type IdempotencyChecker interface {
+	// CheckAndMark atomically checks whether key was processed and marks it as
+	// processed in a single operation. Returns true if the key is new (not yet
+	// processed), false if it was already present. Use this instead of separate
+	// IsProcessed + MarkProcessed calls to avoid TOCTOU races.
+	CheckAndMark(ctx context.Context, key string) (bool, error)
 	IsProcessed(ctx context.Context, key string) (bool, error)
 	MarkProcessed(ctx context.Context, key string) error
 }
