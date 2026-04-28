@@ -7,6 +7,7 @@ vars:
   coverage_html: tmp/coverage.html
   junit_file: tmp/unit-tests.xml
   test_flags: -race
+  test_packages: $(go list ./... | grep -v '/tests\/e2e\|/mocks\|/proto')
 
 tasks:
   bootstrap:
@@ -79,21 +80,22 @@ tasks:
   test:
     desc: Run tests with gotestsum
     cmds:
-      - go tool gotestsum --format pkgname -- {{.test_flags}} ./...
+      - go tool gotestsum --format pkgname -- {{.test_flags}} {{.test_packages}}
 
   coverage:
     desc: Run tests with coverage output
     cmds:
       - mkdir -p tmp
       - go tool gotestsum --format pkgname --junitfile {{.junit_file}} --
-        {{.test_flags}} -coverprofile={{.coverage_file}} ./...
+        {{.test_flags}} -coverprofile={{.coverage_file}} {{.test_packages}}
       - go tool cover -func={{.coverage_file}}
 
   coverage:html:
     desc: Generate HTML coverage report
     cmds:
       - mkdir -p tmp
-      - go test {{.test_flags}} -coverprofile={{.coverage_file}} ./...
+      - go test {{.test_flags}} -coverprofile={{.coverage_file}}
+        {{.test_packages}}
       - go tool cover -html={{.coverage_file}} -o {{.coverage_html}}
 
   vuln:
