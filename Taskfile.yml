@@ -7,7 +7,7 @@ vars:
   coverage_html: tmp/coverage.html
   junit_file: tmp/unit-tests.xml
   test_flags: -race
-  test_packages: $(go list ./... | grep -v '/tests\/e2e\|/mocks\|/proto')
+  test_packages: $(go list ./... | grep -v '/test\/e2e\|/internal\/mocks|/vendor')
 
 tasks:
   bootstrap:
